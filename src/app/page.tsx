@@ -36,7 +36,7 @@ const COPY = {
     subtitle: "ANÁLISE TÉCNICO-TÁTICA DE FUTSAL", match: "Jogo em análise", analyzed: "Equipa analisada",
     opponent: "Adversário", youtube: "Link do vídeo YouTube", load: "Carregar vídeo", video: "Vídeo do jogo",
     videoHelp: "Insere um link YouTube para associar o vídeo à análise.", videoUnavailable: "Vídeo não carregado ou incorporação indisponível.",
-    currentTime: "Tempo atual", setTime: "Ir para segundo", capture: "Atalhos de registo", outcome: "Resultado / observação (opcional)", outcomePlaceholder: "Ex.: remate defendido, golo, bola recuperada…", attackMoment: "Momento de ataque", defenseMoment: "Momento de defesa", savedEvent: "Evento registado", events: "Eventos", zone: "Zona do campo", left: "Esquerda",
+    currentTime: "Tempo atual", setTime: "Ir para segundo", capture: "Atalhos de registo", outcome: "Resultado / observação (opcional)", outcomePlaceholder: "Ex.: remate defendido, golo, bola recuperada…", attackMoment: "Momento de ataque", defenseMoment: "Momento de defesa", momentColumn: "Momento", resultColumn: "Resultado", autoRegisterHint: "Cada atalho regista automaticamente o evento, o momento, a zona e o segundo atual do vídeo.", savedEvent: "Evento registado", events: "Eventos", zone: "Zona do campo", left: "Esquerda",
     center: "Central", right: "Direita", attackTeam: "Equipa em ataque", defenseTeam: "Equipa em defesa",
     stats: "Indicadores do jogo", attacks: "Ataques", counters: "Contra", timeline: "Cronologia de eventos",
     filter: "Todos os eventos", allZones: "Todas as zonas", empty: "Ainda não existem eventos neste jogo.",
@@ -60,7 +60,7 @@ const COPY = {
     subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed",
     opponent: "Opponent", youtube: "YouTube video URL", load: "Load video", video: "Match video",
     videoHelp: "Paste a YouTube link to associate the video with this analysis.", videoUnavailable: "Video not loaded or embedding unavailable.",
-    currentTime: "Current time", setTime: "Seek to second", capture: "Quick event capture", outcome: "Outcome / note (optional)", outcomePlaceholder: "e.g. shot saved, goal, possession won…", attackMoment: "Attacking phase", defenseMoment: "Defensive phase", savedEvent: "Event recorded", events: "Events", zone: "Court zone", left: "Left",
+    currentTime: "Current time", setTime: "Seek to second", capture: "Quick event capture", outcome: "Outcome / note (optional)", outcomePlaceholder: "e.g. shot saved, goal, possession won…", attackMoment: "Attacking phase", defenseMoment: "Defensive phase", momentColumn: "Moment", resultColumn: "Outcome", autoRegisterHint: "Each shortcut immediately records the event, phase, zone and current video second.", savedEvent: "Event recorded", events: "Events", zone: "Court zone", left: "Left",
     center: "Center", right: "Right", attackTeam: "Attacking team", defenseTeam: "Defending team",
     stats: "Match indicators", attacks: "Attacks", counters: "Against", timeline: "Event timeline",
     filter: "All events", allZones: "All zones", empty: "No events recorded for this match yet.",
@@ -553,7 +553,7 @@ export default function HomePage() {
         </div>
 
         {!canRecord && <p className="text-xs text-amber-300">{t.readOnly}</p>}
-        <p className="muted text-xs">Cada atalho regista automaticamente o evento, o momento, a zona e o segundo atual do vídeo.</p>
+        <p className="muted text-xs">{t.autoRegisterHint}</p>
       </section>}
 
       {hasActiveMatch && <>
@@ -571,7 +571,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="scrollbar overflow-x-auto">
-          {filteredRecords.length === 0 ? <div className="p-12 text-center"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[#172331] text-[#8da0b1]"><Activity size={20} /></div><p className="muted text-sm">{t.empty}</p></div> : <table><thead><tr><th>{t.time}</th><th>{t.event}</th><th>Momento</th><th>{t.zone}</th><th>{t.teams}</th><th>Resultado</th><th>{t.action}</th></tr></thead><tbody>
+          {filteredRecords.length === 0 ? <div className="p-12 text-center"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[#172331] text-[#8da0b1]"><Activity size={20} /></div><p className="muted text-sm">{t.empty}</p></div> : <table><thead><tr><th>{t.time}</th><th>{t.event}</th><th>{t.momentColumn}</th><th>{t.zone}</th><th>{t.teams}</th><th>{t.resultColumn}</th><th>{t.action}</th></tr></thead><tbody>
             {filteredRecords.map((record) => <tr key={record.id}><td className="font-mono text-[#7beaa8]">{formatTime(record.video_second)}</td><td>{language === "pt" ? record.event_name_pt : record.event_name_en}</td><td>{record.moment === "attack" ? t.attackMoment : t.defenseMoment}</td><td>{t[record.zone]}</td><td>{record.attacking_team ? `${record.attacking_team} → ${record.defending_team}` : "—"}</td><td className="max-w-[220px] truncate" title={record.outcome ?? ""}>{record.outcome || "—"}</td><td><div className="flex items-center gap-1"><a className="btn !px-2 !py-1.5 text-xs" href={record.youtube_url || "#"} target="_blank" rel="noreferrer"><Link2 size={13} />{t.open}</a><button aria-label={t.delete} className="btn !px-2 !py-1.5 text-xs text-red-300" onClick={() => void removeEvent(record)}><Trash2 size={13} /></button></div></td></tr>)}
           </tbody></table>}
         </div>
