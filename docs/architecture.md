@@ -31,3 +31,19 @@ Create the first Supabase Auth user, then call `create_analysis_project('Nome do
 
 ## Current implementation boundary
 The first commit contains a local-browser demo workspace plus the initial Supabase schema/client foundation. Cloud project selection, sign-in UI and match creation workflows must be completed before multi-user persistence can be considered production-ready.
+
+
+## Event capture v2
+The event capture screen places the YouTube player at full content width. Below it, event shortcuts are grouped by moment and each event/zone combination is a direct one-click action; there is no separate Register button. An optional free-text outcome is captured with the next event.
+
+Default combination rules:
+- Kick-ins (Lateral) and corners (Canto): left/right only.
+- The corresponding opposition events (names ending in Contra): defensive moment; same zone restrictions.
+- Free kicks and attacks: left/center/right.
+- Kick-off (Saída de bola): center only.
+- Goalkeeper net release (Saída de redes) and goal kick (Saída de baliza): left/center/right.
+- Goal (Golo): left/center/right.
+- All event types marked as opposition/counter are stored as defensive moment; all other defaults are stored as attacking moment.
+- For defensive/counter events, the opponent is stored as attacking team and the analysed team as defending team.
+
+Apply migration `supabase/migrations/0002_event_moment_and_outcome.sql` after the initial schema migration. It adds the `event_moment` enum and `outcome` column, backfills existing events, and seeds the three additional event types.
