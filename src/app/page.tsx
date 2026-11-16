@@ -11,7 +11,25 @@ import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
 
 type Language = "pt" | "en";
-type PlayerWindow = Window & { YT?: any; onYouTubeIframeAPIReady?: () => void };
+type YouTubePlayer = {
+  getCurrentTime: () => number;
+  destroy: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+};
+type YouTubePlayerApi = {
+  Player: new (elementId: string, options: {
+    videoId: string;
+    playerVars: Record<string, number>;
+    events: { onReady: () => void; onStateChange: () => void; onError: () => void };
+  }) => YouTubePlayer;
+};
+type PlayerWindow = Window & { YT?: YouTubePlayerApi; onYouTubeIframeAPIReady?: () => void };
+type DbMatchEventRow = {
+  id: string; match_id: string; event_type_id: string; video_second: number; zone: Zone;
+  attacking_team: string | null; defending_team: string | null; created_by: string | null;
+  created_at: string; youtube_url: string;
+  event_types?: { name_pt: string; name_en: string } | null;
+};
 
 const COPY = {
   pt: {
@@ -108,15 +126,15 @@ export default function HomePage() {
   const [filterEvent, setFilterEvent] = useState("all");
   const [filterZone, setFilterZone] = useState("all");
   const [message, setMessage] = useState("");
-  const [mode, setMode] = useState<"demo" | "cloud">("demo");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [cloudUserId, setCloudUserId] = useState<string | null>(null);
   const [cloudMatchId, setCloudMatchId] = useState<string | null>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
   const t = COPY[language];
   const supabase = useMemo(() => getSupabase(), []);
+  const mode = supabase ? "cloud" : "demo";
 
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
   const canRecord = Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
@@ -138,8 +156,15 @@ export default function HomePage() {
       const saved = localStorage.getItem("sportanalist-demo");
       if (saved) {
         const data = JSON.parse(saved);
-        if (Array.isArray(data.records)) setRecords(data.records);
-        if (Array.isArray(data.events)) setEvents(data.events);
+        if (Array.isArray(data.records)) {
+          // The browser-only demo store is hydrated after the first render.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setRecords(data.records);
+        }
+        if (Array.isArray(data.events)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setEvents(data.events);
+        }
       }
     } catch { /* Ignore malformed local demo data. */ }
   }, []);
@@ -150,7 +175,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!supabase) return;
-    setMode("cloud");
     let cancelled = false;
     const loadWorkspaceData = async () => {
       let typeQuery = supabase.from("event_types").select("*").eq("active", true).order("sort_order");
@@ -160,7 +184,7 @@ export default function HomePage() {
       if (cloudMatchId) {
         const { data: rows } = await supabase.from("match_events")
           .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("video_second");
-        if (rows && !cancelled) setRecords(rows.map((row: any) => ({
+        if (rows && !cancelled) setRecords((rows as DbMatchEventRow[]).map((row) => ({
           id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
           event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
           video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
@@ -173,7 +197,7 @@ export default function HomePage() {
     const channel = cloudMatchId ? supabase.channel(`match-events-${cloudMatchId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events", filter: `match_id=eq.${cloudMatchId}` }, (payload) => {
         if (payload.eventType === "INSERT") {
-          const row = payload.new as any;
+          const row = payload.new as DbMatchEventRow;
           const eventType = eventTypesRef.current.find((event) => event.id === row.event_type_id);
           setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
             id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
@@ -181,7 +205,7 @@ export default function HomePage() {
             video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
             defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
           }]);
-        } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as any).id));
+        } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as { id: string }).id));
       }).subscribe() : null;
     return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
   }, [supabase, projectId, cloudMatchId]);
