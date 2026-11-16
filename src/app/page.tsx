@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDownToLine, Check, ChevronDown, CircleHelp, Clock3, FilePlus2,
+  Activity, ArrowDownToLine, CircleHelp, Clock3, FilePlus2,
   Globe2, Link2, Play, Plus, RefreshCw, ShieldCheck, Trash2, Video, X,
 } from "lucide-react";
-import { DEFAULT_EVENT_TYPES, type EventType, type MatchEvent, type Zone, ZONE_LABELS } from "@/lib/types";
+import { DEFAULT_EVENT_TYPES, type EventType, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
 
 type Language = "pt" | "en";
@@ -112,7 +112,6 @@ export default function HomePage() {
   const t = COPY[language];
   const supabase = useMemo(() => getSupabase(), []);
 
-  const isReadOnly = role === "viewer" || role === "configurator";
   const canConfigure = role === "admin" || role === "configurator";
   const canRecord = role === "admin" || role === "analyst";
   const activeEvents = events.filter((event) => event.active);
@@ -296,7 +295,7 @@ export default function HomePage() {
     setEvents((current) => [...current, eventType]);
     if (supabase) {
       const { error } = await supabase.from("event_types").insert({
-        name_pt: eventType.name_pt, name_en: eventType.name_en, is_counter: eventType.is_counter,
+        id: eventType.id, project_id: null, name_pt: eventType.name_pt, name_en: eventType.name_en, is_counter: eventType.is_counter,
         active: true, sort_order: eventType.sort_order,
       });
       if (error) setMessage(error.message);
