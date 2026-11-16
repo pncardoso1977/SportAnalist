@@ -646,3 +646,4 @@ export default function HomePage() {
       {message && <div role="status" className="fixed bottom-4 right-4 z-[60] max-w-sm rounded-xl border border-[#365846] bg-[#12241b] px-3 py-2.5 text-xs text-[#a5f1c1] shadow-xl">{message}<button className="ml-2 text-[#a5f1c1]" onClick={() => setMessage("")}><X size={13} /></button></div>}
     </main>
   );
+}
