@@ -117,7 +117,7 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut, hideAuthenti
   );
 
   if (needsProject) return (
-    <section className="panel grid gap-3 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+    <section className={`panel grid gap-3 p-3 ${hideAuthenticatedBar ? "grid-cols-1" : "md:grid-cols-[1fr_1fr_auto] md:items-end"}`}>
       <div className="md:col-span-3"><div className="font-semibold">Criar projeto de análise</div><p className="muted mt-1 text-xs">O primeiro utilizador fica como administrador deste projeto.</p></div>
       <label className="text-xs text-[#9eb0c0]">Nome do projeto<input className="field mt-2" value={projectName} onChange={(e) => setProjectName(e.target.value)} /></label>
       <label className="text-xs text-[#9eb0c0]">Equipa analisada<input className="field mt-2" value={teamName} onChange={(e) => setTeamName(e.target.value)} /></label>
