@@ -31,7 +31,7 @@ Nunca colocar chaves secretas no frontend.
 - `viewer`: apenas leitura
 
 ## Publicação
-Importar este repositório na Vercel e definir as variáveis Supabase. Ligar o projeto Supabase, executar a migração SQL e configurar os URLs de redirecionamento de Auth. O deploy de produção pode ser feito a partir da branch `main`.
+Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar a migração SQL e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md).
 
 ## Funcionalidades implementadas
 - Player YouTube com leitura do segundo atual e links diretos para cada evento.
