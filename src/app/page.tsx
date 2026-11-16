@@ -49,7 +49,7 @@ const COPY = {
     loading: "A carregar vídeo…", loaded: "Vídeo carregado. O registo usa o segundo atual de reprodução.",
     copyLink: "Copiar link", created: "Evento registado", removed: "Evento eliminado", confirmDelete: "Eliminar este evento?",
     configHint: "Tipos personalizados ficam no navegador em modo demonstração; com Supabase são partilhados pelo projeto.",
-    matchHelp: "Cada jogo tem uma equipa analisada, adversário e vídeo próprio.", noVideo: "Sem vídeo",
+    matchHelp: "Cada jogo tem uma equipa analisada, adversário e vídeo próprio.", noVideo: "Sem vídeo", noActiveMatch: "Sem jogo ativo. Carrega um vídeo ou abre um jogo no histórico para consultar os eventos e as estatísticas.",
     keyboard: "Atalhos", keyboardHint: "Teclas 1–9 registam diretamente o evento correspondente.",
     role: "Perfil", viewer: "Observador", analyst: "Analista", admin: "Administrador", configurator: "Configurador",
     readOnly: "O teu perfil tem permissões apenas de leitura.", loadVideoForEvents: "Carrega um vídeo do jogo para ativar o registo de eventos.", setup: "Configuração de serviços", setupHint: "Para colaboração em tempo real, configure as variáveis Supabase e aplique a migração SQL.",
@@ -74,7 +74,7 @@ const COPY = {
     loading: "Loading video…", loaded: "Video loaded. Events use the current playback second.",
     copyLink: "Copy link", created: "Event recorded", removed: "Event deleted", confirmDelete: "Delete this event?",
     configHint: "Custom types are stored in this browser in demo mode; with Supabase they are shared by the project.",
-    matchHelp: "Each match has an analysed team, opponent and its own video.", noVideo: "No video",
+    matchHelp: "Each match has an analysed team, opponent and its own video.", noVideo: "No video", noActiveMatch: "No active match. Load a video or open a match from the history to view its events and statistics.",
     keyboard: "Shortcuts", keyboardHint: "Keys 1–9 record the corresponding event directly.",
     role: "Role", viewer: "Viewer", analyst: "Analyst", admin: "Administrator", configurator: "Configurator",
     readOnly: "Your role has read-only permissions.", loadVideoForEvents: "Load a match video to enable event recording.", setup: "Service configuration", setupHint: "For real-time collaboration, configure Supabase environment variables and apply the SQL migration.",
@@ -141,8 +141,9 @@ export default function HomePage() {
   const supabase = useMemo(() => getSupabase(), []);
   const mode = supabase ? "cloud" : "demo";
 
+  const hasActiveMatch = Boolean(loadedUrl && (!supabase || cloudMatchId));
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
-  const canRecord = Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
+  const canRecord = hasActiveMatch && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
     if (teamName) { setTeam(teamName); setAttackingTeam(teamName); }
@@ -497,7 +498,11 @@ export default function HomePage() {
         </div>}
       </section>}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(360px,.85fr)]">
+      {!hasActiveMatch && <div className="panel flex items-center gap-3 p-4 text-sm">
+        <Video size={20} className="shrink-0 text-[#65e99c]" />
+        <p className="muted">{t.noActiveMatch}</p>
+      </div>}
+      <div className={`grid gap-5 ${hasActiveMatch ? "xl:grid-cols-[minmax(0,1.65fr)_minmax(360px,.85fr)]" : "xl:grid-cols-1"}`}>
         <section className="panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#263646] px-4 py-3">
             <div><h2 className="font-semibold">{t.video}</h2><p className="muted mt-1 text-xs">{loadedUrl || t.videoHelp}</p></div>
@@ -512,7 +517,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="panel flex flex-col gap-4 p-4">
+        {hasActiveMatch && <section className="panel flex flex-col gap-4 p-4">
           <div className="flex items-center justify-between"><h2 className="font-semibold">{t.capture}</h2><span className="rounded-full bg-[#35d07f18] px-2.5 py-1 text-xs text-[#66e99f]">{records.length} {t.events.toLowerCase()}</span></div>
           <div><div className="mb-2 text-xs font-semibold text-[#9eb0c0]">{t.events}</div><div className="grid grid-cols-2 gap-2">
             {activeEvents.map((event, index) => <button key={event.id} onClick={() => setSelected(event.id)} disabled={!canRecord} className={`flex min-h-[45px] items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm transition ${selected === event.id ? "border-[#35d07f] bg-[#35d07f18] text-[#78efa9]" : "border-[#263646] bg-[#0b131c] hover:border-[#526a7e]"}`}><span>{language === "pt" ? event.name_pt : event.name_en}</span><kbd className="kbd">{index + 1}</kbd></button>)}
@@ -531,9 +536,10 @@ export default function HomePage() {
           {!canRecord && (role === "viewer" || role === "configurator") && <p className="text-xs text-amber-300">{t.readOnly}</p>}
           {!canRecord && (role === "admin" || role === "analyst") && <p className="text-xs text-[#9eb0c0]">{t.loadVideoForEvents}</p>}
           <p className="muted text-[11px]">{t.keyboard}: {t.keyboardHint}</p>
-        </section>
+        </section>}
       </div>
 
+      {hasActiveMatch && <>
       <section className="grid gap-3 sm:grid-cols-3">
         {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-4"><div><p className="muted text-xs">{label}</p><p className="mt-1 text-3xl font-bold tracking-tight">{value}</p></div><div className="rounded-xl bg-[#35d07f17] p-3 text-[#57e394]"><Icon size={21} /></div></div>)}
       </section>
@@ -553,6 +559,7 @@ export default function HomePage() {
           </tbody></table>}
         </div>
       </section>
+      </>}
 
       {canConfigure && <section className="panel grid gap-4 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
         <div className="md:col-span-3 flex items-center justify-between gap-2"><div><h2 className="font-semibold">{t.configure}</h2><p className="muted mt-1 text-xs">{t.configHint}</p></div><ShieldCheck className="text-[#62e69b]" size={22} /></div>
