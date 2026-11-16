@@ -26,12 +26,21 @@ Nunca colocar chaves secretas no frontend.
 
 ## Perfis
 - `admin`: gestão integral do projeto, equipa, utilizadores e eventos
-- `analyst`: leitura e criação/edição dos seus eventos
+- `analyst`: leitura, registo e remoção dos próprios eventos
 - `configurator`: leitura e parametrização de tipos de evento
 - `viewer`: apenas leitura
 
 ## Publicação
 Importar este repositório na Vercel e definir as variáveis Supabase. Ligar o projeto Supabase, executar a migração SQL e configurar os URLs de redirecionamento de Auth. O deploy de produção pode ser feito a partir da branch `main`.
 
-## Estado
-Primeira fundação técnica. A integração de serviços externos depende da configuração dos respetivos projetos e credenciais.
+## Funcionalidades implementadas
+- Player YouTube com leitura do segundo atual e links diretos para cada evento.
+- Nove eventos iniciais, tipos personalizados bilingues e zona esquerda/central/direita.
+- Identificação de ataque e defesa nos eventos de contra.
+- Atalhos de teclado 1–9, cronologia, filtros, indicadores e exportação CSV.
+- Autenticação Supabase, criação de projeto com primeiro administrador e gestão de membros por email/perfil (quando Supabase está configurado).
+- Persistência local em modo demonstração.
+- Persistência de jogos/eventos e atualizações em tempo real na mesma partida quando Supabase está configurado.
+
+## Estado e pré-requisitos de produção
+O código e a migração estão no repositório; a publicação online ainda não foi ativada. É necessário criar o projeto Supabase, aplicar a migração e importar o repositório na Vercel seguindo [docs/deployment.md](docs/deployment.md). Os planos gratuitos têm quotas e não equivalem a serviço sem limites.
