@@ -212,7 +212,7 @@ create or replace function public.add_project_member_by_email(
   member_role public.app_role
 )
 returns uuid language plpgsql security definer set search_path = public
-as $
+as $$
 declare member_user_id uuid;
 begin
   if not public.has_project_role(target_project, array['admin']::public.app_role[]) then
@@ -230,7 +230,7 @@ begin
   on conflict (project_id, user_id) do update set role = excluded.role;
   return member_user_id;
 end;
-$;
+$$;
 
 grant execute on function public.add_project_member_by_email(uuid, text, public.app_role) to authenticated;
 
