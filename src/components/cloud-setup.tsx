@@ -101,7 +101,7 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut, hideAuthenti
   }
 
   if (!userId) return (
-    <section className="panel grid gap-3 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+    <section className={`panel grid gap-3 p-3 ${hideAuthenticatedBar ? "grid-cols-1" : "md:grid-cols-[1fr_1fr_auto] md:items-end"}`}>
       <div className="md:col-span-3">
         <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={17} className="text-[#60e69a]" /> Acesso da equipa / Team access</div>
         <p className="muted mt-1 text-xs">Supabase está configurado. Inicia sessão para ativar a base de dados partilhada e as permissões.</p>
