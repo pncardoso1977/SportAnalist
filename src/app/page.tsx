@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, type EventType, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
+import { CloudSetup } from "@/components/cloud-setup";
+import type { AppRole } from "@/lib/types";
 
 type Language = "pt" | "en";
 type PlayerWindow = Window & { YT?: any; onYouTubeIframeAPIReady?: () => void };
@@ -107,13 +109,23 @@ export default function HomePage() {
   const [filterZone, setFilterZone] = useState("all");
   const [message, setMessage] = useState("");
   const [mode, setMode] = useState<"demo" | "cloud">("demo");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [cloudUserId, setCloudUserId] = useState<string | null>(null);
+  const [cloudMatchId, setCloudMatchId] = useState<string | null>(null);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const t = COPY[language];
   const supabase = useMemo(() => getSupabase(), []);
 
-  const canConfigure = role === "admin" || role === "configurator";
-  const canRecord = role === "admin" || role === "analyst";
+  const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
+  const canRecord = supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst";
+  const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
+    setProjectId(id); setCloudUserId(userId); setRole(memberRole);
+    if (teamName) { setTeam(teamName); setAttackingTeam(teamName); }
+  }, []);
+  const handleSignOut = useCallback(() => {
+    setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]);
+  }, []);
   const activeEvents = events.filter((event) => event.active);
   const currentEvent = events.find((event) => event.id === selected);
   const currentIsCounter = Boolean(currentEvent?.is_counter);
@@ -137,37 +149,39 @@ export default function HomePage() {
     if (!supabase) return;
     setMode("cloud");
     let cancelled = false;
-    const loadEvents = async () => {
-      const { data, error } = await supabase.from("event_types").select("*").eq("active", true).order("sort_order");
-      if (!cancelled && !error && data?.length) setEvents(data as EventType[]);
-      const { data: authData } = await supabase.auth.getUser();
-      if (!cancelled && authData.user) {
-        const { data: rows } = await supabase.from("match_events").select("*, event_types(name_pt,name_en)").order("video_second");
-        if (rows && !cancelled) {
-          setRecords(rows.map((row: any) => ({
-            id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
-            event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
-            video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
-            defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
-            youtube_url: row.youtube_url,
-          })));
-        }
+    const loadWorkspaceData = async () => {
+      let typeQuery = supabase.from("event_types").select("*").eq("active", true).order("sort_order");
+      typeQuery = projectId ? typeQuery.or(`project_id.is.null,project_id.eq.${projectId}`) : typeQuery.is("project_id", null);
+      const { data: types, error: typeError } = await typeQuery;
+      if (!cancelled && !typeError && types?.length) setEvents(types as EventType[]);
+      if (cloudMatchId) {
+        const { data: rows } = await supabase.from("match_events")
+          .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("video_second");
+        if (rows && !cancelled) setRecords(rows.map((row: any) => ({
+          id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
+          event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
+          video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
+          defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
+          youtube_url: row.youtube_url,
+        })));
       }
     };
-    void loadEvents();
-    const channel = supabase.channel("match-events-live").on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, (payload) => {
-      if (payload.eventType === "INSERT") {
-        const row = payload.new as any;
-        setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
-          id: row.id, match_id: row.match_id, event_type_id: row.event_type_id, event_name_pt: row.event_name_pt ?? "Evento",
-          event_name_en: row.event_name_en ?? "Event", video_second: row.video_second, zone: row.zone,
-          attacking_team: row.attacking_team, defending_team: row.defending_team, created_by: row.created_by,
-          created_at: row.created_at, youtube_url: row.youtube_url,
-        }]);
-      } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as any).id));
-    }).subscribe();
-    return () => { cancelled = true; void supabase.removeChannel(channel); };
-  }, [supabase]);
+    void loadWorkspaceData();
+    const channel = cloudMatchId ? supabase.channel(`match-events-${cloudMatchId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_events", filter: `match_id=eq.${cloudMatchId}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const row = payload.new as any;
+          const eventType = events.find((event) => event.id === row.event_type_id);
+          setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
+            id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
+            event_name_pt: eventType?.name_pt ?? "Evento", event_name_en: eventType?.name_en ?? "Event",
+            video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
+            defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
+          }]);
+        } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as any).id));
+      }).subscribe() : null;
+    return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
+  }, [supabase, projectId, cloudMatchId, events]);
 
   const refreshClock = useCallback(() => {
     const second = playerRef.current?.getCurrentTime?.();
@@ -235,27 +249,34 @@ export default function HomePage() {
     if (!eventType || !canRecord) return;
     const second = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? currentSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
-    const matchId = "demo-match";
-    const timestamp = new Date().toISOString();
-    const localRecord: MatchEvent = {
-      id: crypto.randomUUID(), match_id: matchId, event_type_id: eventType.id,
-      event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
-      video_second: second, zone, attacking_team: eventType.is_counter ? attackingTeam : null,
-      defending_team: eventType.is_counter ? defendingTeam : null, created_by: null,
-      created_at: timestamp, youtube_url: videoMoment,
-    };
-    setRecords((current) => [...current, localRecord]);
     if (supabase) {
-      const { data: userData } = await supabase.auth.getUser();
-      const { error } = await supabase.from("match_events").insert({
-        match_id: null, event_type_id: eventType.id, video_second: second, zone,
+      if (!cloudMatchId || !cloudUserId) { setMessage(t.noAuth); return; }
+      const { data, error } = await supabase.from("match_events").insert({
+        match_id: cloudMatchId, event_type_id: eventType.id, video_second: second, zone,
         attacking_team: eventType.is_counter ? attackingTeam : null,
-        defending_team: eventType.is_counter ? defendingTeam : null, youtube_url: videoMoment,
-        created_by: userData.user?.id ?? null,
-      });
-      if (error) setMessage(t.saveError);
-      else setMessage(t.saveCloud);
-    } else setMessage(t.created + " · " + t.saveLocal);
+        defending_team: eventType.is_counter ? defendingTeam : null, youtube_url: videoMoment, created_by: cloudUserId,
+      }).select("id, created_at").single();
+      if (error) { setMessage(error.message); return; }
+      const saved: MatchEvent = {
+        id: data.id, match_id: cloudMatchId, event_type_id: eventType.id,
+        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en, video_second: second, zone,
+        attacking_team: eventType.is_counter ? attackingTeam : null,
+        defending_team: eventType.is_counter ? defendingTeam : null, created_by: cloudUserId,
+        created_at: data.created_at, youtube_url: videoMoment,
+      };
+      setRecords((current) => current.some((entry) => entry.id === saved.id) ? current : [...current, saved]);
+      setMessage(t.saveCloud);
+    } else {
+      const localRecord: MatchEvent = {
+        id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id,
+        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
+        video_second: second, zone, attacking_team: eventType.is_counter ? attackingTeam : null,
+        defending_team: eventType.is_counter ? defendingTeam : null, created_by: null,
+        created_at: new Date().toISOString(), youtube_url: videoMoment,
+      };
+      setRecords((current) => [...current, localRecord]);
+      setMessage(t.created + " · " + t.saveLocal);
+    }
     setSelected(eventType.id);
   }
 
@@ -265,14 +286,30 @@ export default function HomePage() {
       if (record.created_by !== data.user?.id) return;
     }
     if (!window.confirm(t.confirmDelete)) return;
+    if (supabase) {
+      const { error } = await supabase.from("match_events").delete().eq("id", record.id);
+      if (error) { setMessage(error.message); return; }
+    }
     setRecords((current) => current.filter((entry) => entry.id !== record.id));
-    if (supabase && record.created_by) await supabase.from("match_events").delete().eq("id", record.id);
     setMessage(t.removed);
   }
 
-  function loadVideo() {
+  async function loadVideo() {
     const id = parseYouTubeId(videoUrl);
     if (!id) { setMessage(t.linkBad); return; }
+    if (supabase) {
+      if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
+      const { data: match, error } = await supabase.from("matches").insert({
+        project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
+        youtube_url: videoUrl.trim(), created_by: cloudUserId,
+      }).select("id").single();
+      if (error || !match) { setMessage(error?.message ?? t.saveError); return; }
+      setCloudMatchId(match.id);
+      setRecords([]);
+    } else {
+      setCloudMatchId(null);
+      setRecords([]);
+    }
     setVideoId(id);
     setLoadedUrl(videoUrl.trim());
     setCurrentSecond(0);
@@ -292,14 +329,15 @@ export default function HomePage() {
       id: crypto.randomUUID(), name_pt: newNamePt.trim(), name_en: newNameEn.trim(),
       is_counter: newIsCounter, active: true, sort_order: events.length * 10 + 10,
     };
-    setEvents((current) => [...current, eventType]);
     if (supabase) {
+      if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
       const { error } = await supabase.from("event_types").insert({
-        id: eventType.id, project_id: null, name_pt: eventType.name_pt, name_en: eventType.name_en, is_counter: eventType.is_counter,
-        active: true, sort_order: eventType.sort_order,
+        id: eventType.id, project_id: projectId, name_pt: eventType.name_pt, name_en: eventType.name_en,
+        is_counter: eventType.is_counter, active: true, sort_order: eventType.sort_order, created_by: cloudUserId,
       });
-      if (error) setMessage(error.message);
+      if (error) { setMessage(error.message); return; }
     }
+    setEvents((current) => [...current, eventType]);
     setNewNamePt(""); setNewNameEn(""); setNewIsCounter(false); setMessage(t.created);
   }
 
@@ -325,13 +363,15 @@ export default function HomePage() {
           <div><h1 className="text-2xl font-bold tracking-tight">SportAnalist</h1><p className="muted text-[10px] font-semibold tracking-[.16em]">{t.subtitle}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="hidden rounded-full border border-[#35d07f40] bg-[#35d07f12] px-3 py-2 text-xs text-[#63e99e] sm:inline-flex"><span className="mr-2 mt-1 h-2 w-2 rounded-full bg-[#35d07f]" />{mode === "cloud" ? t.connected : t.demo}</span>
-          <select aria-label={t.role} className="field !w-auto text-sm" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+          <span className="hidden rounded-full border border-[#35d07f40] bg-[#35d07f12] px-3 py-2 text-xs text-[#63e99e] sm:inline-flex"><span className="mr-2 mt-1 h-2 w-2 rounded-full bg-[#35d07f]" />{mode === "cloud" ? "Supabase configurado" : t.demo}</span>
+          <select aria-label={t.role} disabled={Boolean(supabase)} className="field !w-auto text-sm" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
             <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
           </select>
           <button className="btn" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}><Globe2 size={16} />{language.toUpperCase()}</button>
         </div>
       </header>
+
+      {supabase && <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} />}
 
       <section className="grid gap-3 rounded-2xl border border-[#263646] bg-[#101923eb] p-4 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end">
         <label className="block text-xs font-semibold text-[#a8b8c7]">{t.analyzed}<input className="field mt-2" value={team} onChange={(e) => { setTeam(e.target.value); setAttackingTeam(e.target.value); }} /></label>
