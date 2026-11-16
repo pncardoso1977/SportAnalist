@@ -55,6 +55,7 @@ const COPY = {
     readOnly: "Perfil de visualização: registo desativado.", setup: "Configuração de serviços", setupHint: "Para colaboração em tempo real, configure as variáveis Supabase e aplique a migração SQL.",
     statsTotal: "Total de eventos", roleDemo: "Perfil demonstrativo", noAuth: "A autenticação será ativada quando Supabase estiver configurado.",
     eventRequired: "Preenche os nomes do evento.", saveError: "Não foi possível guardar no servidor. O registo foi mantido localmente.",
+    members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
   },
   en: {
     subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed",
@@ -79,6 +80,7 @@ const COPY = {
     readOnly: "Viewer role: event recording is disabled.", setup: "Service configuration", setupHint: "For real-time collaboration, configure Supabase environment variables and apply the SQL migration.",
     statsTotal: "Total events", roleDemo: "Demo role", noAuth: "Authentication will be enabled once Supabase is configured.",
     eventRequired: "Enter both event names.", saveError: "Could not save to server. The event was kept locally.",
+    members: "Manage users", memberEmail: "User email", memberRole: "Role", addMember: "Add user", memberHint: "The user must create an account first. The role is applied to this project and enforced by the database.", memberAdded: "User added to the project.",
   },
 } as const;
 
@@ -123,6 +125,8 @@ export default function HomePage() {
   const [newNamePt, setNewNamePt] = useState("");
   const [newNameEn, setNewNameEn] = useState("");
   const [newIsCounter, setNewIsCounter] = useState(false);
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState<AppRole>("analyst");
   const [filterEvent, setFilterEvent] = useState("all");
   const [filterZone, setFilterZone] = useState("all");
   const [message, setMessage] = useState("");
@@ -370,6 +374,16 @@ export default function HomePage() {
     setNewNamePt(""); setNewNameEn(""); setNewIsCounter(false); setMessage(t.created);
   }
 
+  async function addProjectMember() {
+    if (!supabase || !projectId || role !== "admin" || !memberEmail.trim()) return;
+    const { error } = await supabase.rpc("add_project_member_by_email", {
+      target_project: projectId, member_email: memberEmail.trim(), member_role: memberRole,
+    });
+    if (error) { setMessage(error.message); return; }
+    setMemberEmail("");
+    setMessage(t.memberAdded);
+  }
+
   function exportCsv() {
     const rows = [
       ["video_second", "event_pt", "event_en", "zone", "attacking_team", "defending_team", "youtube_url"],
@@ -471,6 +485,15 @@ export default function HomePage() {
         <label className="text-xs text-[#9eb0c0]">{t.newEventEn}<input className="field mt-2" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
         <button className="btn btn-primary h-[42px]" onClick={() => void createEventType()}><FilePlus2 size={15} />{t.create}</button>
         <label className="flex items-center gap-2 text-xs text-[#b4c2ce] md:col-span-3"><input type="checkbox" checked={newIsCounter} onChange={(e) => setNewIsCounter(e.target.checked)} className="accent-[#35d07f]" />{t.counter}</label>
+      </section>}
+
+      {supabase && projectId && role === "admin" && <section className="panel grid gap-3 p-4 md:grid-cols-[1fr_220px_auto] md:items-end">
+        <div className="md:col-span-3"><h2 className="font-semibold">{t.members}</h2><p className="muted mt-1 text-xs">{t.memberHint}</p></div>
+        <label className="text-xs text-[#9eb0c0]">{t.memberEmail}<input type="email" className="field mt-2" value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} placeholder="analista@clube.pt" /></label>
+        <label className="text-xs text-[#9eb0c0]">{t.memberRole}<select className="field mt-2" value={memberRole} onChange={(e) => setMemberRole(e.target.value as AppRole)}>
+          <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
+        </select></label>
+        <button className="btn btn-primary h-[42px]" disabled={!memberEmail.trim()} onClick={() => void addProjectMember()}><Plus size={15} />{t.addMember}</button>
       </section>}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#263646] pt-4">
