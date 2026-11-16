@@ -204,5 +204,35 @@ grant execute on function public.create_analysis_project(text, text) to authenti
 grant execute on function public.is_project_member(uuid) to authenticated;
 grant execute on function public.has_project_role(uuid, public.app_role[]) to authenticated;
 
+-- Only project administrators can add or change members. The invited user
+-- must already have registered with Supabase Auth.
+create or replace function public.add_project_member_by_email(
+  target_project uuid,
+  member_email text,
+  member_role public.app_role
+)
+returns uuid language plpgsql security definer set search_path = public
+as $
+declare member_user_id uuid;
+begin
+  if not public.has_project_role(target_project, array['admin']::public.app_role[]) then
+    raise exception 'Only project administrators can manage members';
+  end if;
+  select id into member_user_id
+  from auth.users
+  where lower(email) = lower(trim(member_email))
+  limit 1;
+  if member_user_id is null then
+    raise exception 'User not found. Ask them to create an account first.';
+  end if;
+  insert into public.project_members(project_id, user_id, role)
+  values (target_project, member_user_id, member_role)
+  on conflict (project_id, user_id) do update set role = excluded.role;
+  return member_user_id;
+end;
+$;
+
+grant execute on function public.add_project_member_by_email(uuid, text, public.app_role) to authenticated;
+
 -- Realtime publication for collaborative event registration.
 alter publication supabase_realtime add table public.match_events;
