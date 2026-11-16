@@ -7,7 +7,7 @@ import type { AppRole } from "@/lib/types";
 
 type Props = {
   supabase: SupabaseClient;
-  onWorkspaceReady: (projectId: string, userId: string, role: AppRole) => void;
+  onWorkspaceReady: (projectId: string, userId: string, role: AppRole, teamName?: string) => void;
   onSignOut: () => void;
 };
 
@@ -31,8 +31,9 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
       if (error) { setNotice(error.message); return; }
       if (!data?.length) { setNeedsProject(true); return; }
       const member = data[0] as { project_id: string; role: AppRole };
+      const { data: project } = await supabase.from("projects").select("analyzed_team").eq("id", member.project_id).maybeSingle();
       setNeedsProject(false);
-      onWorkspaceReady(member.project_id, id, member.role);
+      onWorkspaceReady(member.project_id, id, member.role, project?.analyzed_team);
     };
     void supabase.auth.getUser().then(({ data, error }) => {
       if (cancelled) return;
@@ -66,7 +67,10 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
         const { data, error } = await supabase.from("project_members").select("project_id, role").eq("user_id", result.data.user.id).limit(1);
         if (error) setNotice(error.message);
         else if (!data?.length) setNeedsProject(true);
-        else onWorkspaceReady(data[0].project_id, result.data.user.id, data[0].role as AppRole);
+        else {
+          const { data: project } = await supabase.from("projects").select("analyzed_team").eq("id", data[0].project_id).maybeSingle();
+          onWorkspaceReady(data[0].project_id, result.data.user.id, data[0].role as AppRole, project?.analyzed_team);
+        }
       }
     } finally { setBusy(false); }
   }
@@ -82,7 +86,7 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
       else if (data) {
         setNeedsProject(false);
         setTeamName(teamName.trim());
-        onWorkspaceReady(data as string, userId, "admin");
+        onWorkspaceReady(data as string, userId, "admin", teamName.trim());
       }
     } finally { setBusy(false); }
   }
