@@ -54,7 +54,7 @@ create table public.event_types (
 
 create table public.match_events (
   id uuid primary key default gen_random_uuid(),
-  match_id uuid references public.matches(id) on delete cascade,
+  match_id uuid not null references public.matches(id) on delete cascade,
   event_type_id text not null references public.event_types(id),
   video_second integer not null check (video_second >= 0),
   zone public.court_zone not null,
