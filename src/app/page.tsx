@@ -5,7 +5,7 @@ import {
   Activity, ArrowDownToLine, CircleHelp, Clock3, FilePlus2,
   Globe2, Link2, Play, Plus, RefreshCw, ShieldCheck, Trash2, Video, X,
 } from "lucide-react";
-import { DEFAULT_EVENT_TYPES, type EventType, type MatchEvent, type Zone } from "@/lib/types";
+import { DEFAULT_EVENT_TYPES, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
@@ -53,7 +53,7 @@ const COPY = {
     keyboard: "Atalhos", keyboardHint: "Teclas 1–9 registam diretamente o evento correspondente.",
     role: "Perfil", viewer: "Observador", analyst: "Analista", admin: "Administrador", configurator: "Configurador",
     readOnly: "O teu perfil tem permissões apenas de leitura.", loadVideoForEvents: "Carrega um vídeo do jogo para ativar o registo de eventos.", setup: "Configuração de serviços", setupHint: "Para colaboração em tempo real, configure as variáveis Supabase e aplique a migração SQL.",
-    statsTotal: "Total de eventos", roleDemo: "Perfil demonstrativo", noAuth: "A autenticação será ativada quando Supabase estiver configurado.",
+    statsTotal: "Total de eventos", matchHistory: "Histórico de jogos", noMatches: "Ainda não existem jogos guardados neste projeto.", openMatch: "Abrir jogo", savedOn: "Guardado em", matchOpened: "Jogo carregado do histórico.", roleDemo: "Perfil demonstrativo", noAuth: "A autenticação será ativada quando Supabase estiver configurado.",
     eventRequired: "Preenche os nomes do evento.", saveError: "Não foi possível guardar no servidor. O registo foi mantido localmente.",
     members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
   },
@@ -78,7 +78,7 @@ const COPY = {
     keyboard: "Shortcuts", keyboardHint: "Keys 1–9 record the corresponding event directly.",
     role: "Role", viewer: "Viewer", analyst: "Analyst", admin: "Administrator", configurator: "Configurator",
     readOnly: "Your role has read-only permissions.", loadVideoForEvents: "Load a match video to enable event recording.", setup: "Service configuration", setupHint: "For real-time collaboration, configure Supabase environment variables and apply the SQL migration.",
-    statsTotal: "Total events", roleDemo: "Demo role", noAuth: "Authentication will be enabled once Supabase is configured.",
+    statsTotal: "Total events", matchHistory: "Match history", noMatches: "No matches have been saved in this project yet.", openMatch: "Open match", savedOn: "Saved on", matchOpened: "Match loaded from history.", roleDemo: "Demo role", noAuth: "Authentication will be enabled once Supabase is configured.",
     eventRequired: "Enter both event names.", saveError: "Could not save to server. The event was kept locally.",
     members: "Manage users", memberEmail: "User email", memberRole: "Role", addMember: "Add user", memberHint: "The user must create an account first. The role is applied to this project and enforced by the database.", memberAdded: "User added to the project.",
   },
@@ -133,6 +133,7 @@ export default function HomePage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [cloudUserId, setCloudUserId] = useState<string | null>(null);
   const [cloudMatchId, setCloudMatchId] = useState<string | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
@@ -147,7 +148,7 @@ export default function HomePage() {
     if (teamName) { setTeam(teamName); setAttackingTeam(teamName); }
   }, []);
   const handleSignOut = useCallback(() => {
-    setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]);
+    setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
   }, []);
   const activeEvents = events.filter((event) => event.active);
   const currentEvent = events.find((event) => event.id === selected);
@@ -207,6 +208,40 @@ export default function HomePage() {
       }).subscribe() : null;
     return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
   }, [supabase, projectId, cloudMatchId]);
+
+  useEffect(() => {
+    if (!supabase || !projectId) {
+      setMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const loadMatches = async () => {
+      const { data, error } = await supabase.from("matches")
+        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (cancelled) return;
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      setMatches((data ?? []) as Match[]);
+    };
+    void loadMatches();
+    const channel = supabase.channel(`project-matches-${projectId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "matches", filter: `project_id=eq.${projectId}`,
+      }, (payload) => {
+        const row = payload.new as Match;
+        setMatches((current) => current.some((match) => match.id === row.id) ? current : [row, ...current]);
+      })
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, projectId]);
 
   const refreshClock = useCallback(() => {
     const second = playerRef.current?.getCurrentTime?.();
@@ -324,20 +359,22 @@ export default function HomePage() {
     if (!id) { setMessage(t.linkBad); return; }
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
-      const { data: existing } = await supabase.from("matches").select("id")
+      const { data: existing, error: lookupError } = await supabase.from("matches")
+        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at")
         .eq("project_id", projectId).eq("home_team", team).eq("away_team", opponent)
         .eq("youtube_url", videoUrl.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      let matchId = existing?.id as string | undefined;
-      if (!matchId) {
-        const { data: match, error } = await supabase.from("matches").insert({
+      if (lookupError) { setMessage(lookupError.message); return; }
+      let savedMatch = existing as Match | null;
+      if (!savedMatch) {
+        const { data: created, error } = await supabase.from("matches").insert({
           project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
           youtube_url: videoUrl.trim(), created_by: cloudUserId,
-        }).select("id").single();
-        if (error || !match) { setMessage(error?.message ?? t.saveError); return; }
-        matchId = match.id;
+        }).select("id, home_team, away_team, analyzed_team, youtube_url, created_at").single();
+        if (error || !created) { setMessage(error?.message ?? t.saveError); return; }
+        savedMatch = created as Match;
       }
-      if (!matchId) { setMessage(t.saveError); return; }
-      setCloudMatchId(matchId);
+      setMatches((current) => [savedMatch!, ...current.filter((match) => match.id !== savedMatch!.id)]);
+      setCloudMatchId(savedMatch.id);
       setRecords([]);
     } else {
       setCloudMatchId(null);
@@ -348,6 +385,25 @@ export default function HomePage() {
     setCurrentSecond(0);
     setManualSecond("0");
     setMessage(t.loading);
+  }
+
+  function openSavedMatch(match: Match) {
+    const id = parseYouTubeId(match.youtube_url);
+    if (!id) { setMessage(t.linkBad); return; }
+    const opponentName = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
+    setTeam(match.analyzed_team);
+    setAttackingTeam(match.analyzed_team);
+    setOpponent(opponentName);
+    setDefendingTeam(opponentName);
+    setVideoUrl(match.youtube_url);
+    setLoadedUrl(match.youtube_url);
+    setCloudMatchId(match.id);
+    setVideoId(id);
+    setCurrentSecond(0);
+    setManualSecond("0");
+    setRecords([]);
+    if (playerRef.current && videoId === id) playerRef.current.seekTo(0, true);
+    setMessage(t.matchOpened);
   }
 
   function seek() {
@@ -422,6 +478,27 @@ export default function HomePage() {
         <label className="block text-xs font-semibold text-[#a8b8c7]">{t.youtube}<input className="field mt-2" placeholder="https://www.youtube.com/watch?v=…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} /></label>
         <button className="btn btn-primary h-[42px]" onClick={loadVideo}><Video size={16} />{t.load}</button>
       </section>
+
+      {supabase && projectId && <section className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] px-4 py-3">
+          <div><h2 className="font-semibold">{t.matchHistory}</h2><p className="muted mt-1 text-xs">{matches.length} {language === "pt" ? "jogos guardados" : "saved matches"}</p></div>
+          <span className="rounded-full border border-[#263646] px-2.5 py-1 text-xs text-[#9eb0c0]">{team}</span>
+        </div>
+        {matches.length === 0 ? <p className="muted p-4 text-sm">{t.noMatches}</p> : <div className="scrollbar flex flex-col divide-y divide-[#263646]">
+          {matches.map((match) => {
+            const opposingTeam = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
+            return <div key={match.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{match.analyzed_team} <span className="muted font-normal">vs</span> {opposingTeam}</p>
+                <p className="muted mt-1 truncate text-xs">{match.youtube_url} · {t.savedOn} {new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium" }).format(new Date(match.created_at))}</p>
+              </div>
+              <button className={`btn shrink-0 text-xs ${cloudMatchId === match.id ? "border-[#35d07f] text-[#78efa9]" : ""}`} onClick={() => openSavedMatch(match)}>
+                <Play size={14} />{t.openMatch}
+              </button>
+            </div>;
+          })}
+        </div>}
+      </section>}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(360px,.85fr)]">
         <section className="panel overflow-hidden">
