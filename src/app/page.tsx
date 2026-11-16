@@ -5,7 +5,7 @@ import {
   Activity, ArrowDownToLine, CircleHelp, Clock3, FilePlus2,
   Globe2, Link2, Play, Plus, RefreshCw, ShieldCheck, Trash2, Video, X,
 } from "lucide-react";
-import { DEFAULT_EVENT_TYPES, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
+import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
@@ -25,7 +25,7 @@ type YouTubePlayerApi = {
 };
 type PlayerWindow = Window & { YT?: YouTubePlayerApi; onYouTubeIframeAPIReady?: () => void };
 type DbMatchEventRow = {
-  id: string; match_id: string; event_type_id: string; video_second: number; zone: Zone;
+  id: string; match_id: string; event_type_id: string; video_second: number; moment: EventMoment; zone: Zone; outcome: string | null;
   attacking_team: string | null; defending_team: string | null; created_by: string | null;
   created_at: string; youtube_url: string;
   event_types?: { name_pt: string; name_en: string } | null;
@@ -36,8 +36,7 @@ const COPY = {
     subtitle: "ANÁLISE TÉCNICO-TÁTICA DE FUTSAL", match: "Jogo em análise", analyzed: "Equipa analisada",
     opponent: "Adversário", youtube: "Link do vídeo YouTube", load: "Carregar vídeo", video: "Vídeo do jogo",
     videoHelp: "Insere um link YouTube para associar o vídeo à análise.", videoUnavailable: "Vídeo não carregado ou incorporação indisponível.",
-    currentTime: "Tempo atual", setTime: "Ir para segundo", capture: "Registar evento", selected: "Evento selecionado",
-    chooseEvent: "Escolhe um evento para começar", events: "Eventos", zone: "Zona do campo", left: "Esquerda",
+    currentTime: "Tempo atual", setTime: "Ir para segundo", capture: "Atalhos de registo", outcome: "Resultado / observação (opcional)", outcomePlaceholder: "Ex.: remate defendido, golo, bola recuperada…", attackMoment: "Momento de ataque", defenseMoment: "Momento de defesa", savedEvent: "Evento registado", events: "Eventos", zone: "Zona do campo", left: "Esquerda",
     center: "Central", right: "Direita", attackTeam: "Equipa em ataque", defenseTeam: "Equipa em defesa",
     stats: "Indicadores do jogo", attacks: "Ataques", counters: "Contra", timeline: "Cronologia de eventos",
     filter: "Todos os eventos", allZones: "Todas as zonas", empty: "Ainda não existem eventos neste jogo.",
@@ -61,8 +60,7 @@ const COPY = {
     subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed",
     opponent: "Opponent", youtube: "YouTube video URL", load: "Load video", video: "Match video",
     videoHelp: "Paste a YouTube link to associate the video with this analysis.", videoUnavailable: "Video not loaded or embedding unavailable.",
-    currentTime: "Current time", setTime: "Seek to second", capture: "Record event", selected: "Selected event",
-    chooseEvent: "Choose an event to start", events: "Events", zone: "Court zone", left: "Left",
+    currentTime: "Current time", setTime: "Seek to second", capture: "Quick event capture", outcome: "Outcome / note (optional)", outcomePlaceholder: "e.g. shot saved, goal, possession won…", attackMoment: "Attacking phase", defenseMoment: "Defensive phase", savedEvent: "Event recorded", events: "Events", zone: "Court zone", left: "Left",
     center: "Center", right: "Right", attackTeam: "Attacking team", defenseTeam: "Defending team",
     stats: "Match indicators", attacks: "Attacks", counters: "Against", timeline: "Event timeline",
     filter: "All events", allZones: "All zones", empty: "No events recorded for this match yet.",
@@ -100,6 +98,13 @@ function formatTime(seconds: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function zonesForEvent(event: EventType): Zone[] {
+  const search = `${event.id} ${event.name_pt}`.toLowerCase();
+  if (search.includes("lateral") || search.includes("corner") || search.includes("canto")) return ["left", "right"];
+  if (search.includes("kick-off") || search.includes("saída de bola")) return ["center"];
+  return ["left", "center", "right"];
+}
+
 function youtubeMoment(base: string, seconds: number) {
   if (!base) return "";
   const id = parseYouTubeId(base);
@@ -118,10 +123,7 @@ export default function HomePage() {
   const [manualSecond, setManualSecond] = useState("0");
   const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENT_TYPES);
   const [records, setRecords] = useState<MatchEvent[]>([]);
-  const [selected, setSelected] = useState<string>("");
-  const [zone, setZone] = useState<Zone>("center");
-  const [attackingTeam, setAttackingTeam] = useState("Equipa A");
-  const [defendingTeam, setDefendingTeam] = useState("Equipa B");
+  const [outcomeText, setOutcomeText] = useState("");
   const [newNamePt, setNewNamePt] = useState("");
   const [newNameEn, setNewNameEn] = useState("");
   const [newIsCounter, setNewIsCounter] = useState(false);
@@ -146,14 +148,12 @@ export default function HomePage() {
   const canRecord = hasActiveMatch && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
-    if (teamName) { setTeam(teamName); setAttackingTeam(teamName); }
+    if (teamName) setTeam(teamName);
   }, []);
   const handleSignOut = useCallback(() => {
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
   }, []);
   const activeEvents = events.filter((event) => event.active);
-  const currentEvent = events.find((event) => event.id === selected);
-  const currentIsCounter = Boolean(currentEvent?.is_counter);
 
   useEffect(() => { eventTypesRef.current = events; }, [events]);
 
@@ -187,7 +187,7 @@ export default function HomePage() {
         if (rows && !cancelled) setRecords((rows as DbMatchEventRow[]).map((row) => ({
           id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
           event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
-          video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
+          video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
           defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
           youtube_url: row.youtube_url,
         })));
@@ -202,7 +202,7 @@ export default function HomePage() {
           setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
             id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
             event_name_pt: eventType?.name_pt ?? "Evento", event_name_en: eventType?.name_en ?? "Event",
-            video_second: row.video_second, zone: row.zone, attacking_team: row.attacking_team,
+            video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
             defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
           }]);
         } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as { id: string }).id));
@@ -282,44 +282,33 @@ export default function HomePage() {
     };
   }, [videoId, refreshClock, t.loaded, t.videoUnavailable]);
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      const index = Number(event.key) - 1;
-      if (index >= 0 && index < activeEvents.length && canRecord) {
-        event.preventDefault();
-        void registerEvent(activeEvents[index]);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // registration reads live state through the current render
-  });
-
   const filteredRecords = useMemo(() => records
     .filter((record) => filterEvent === "all" || record.event_type_id === filterEvent)
     .filter((record) => filterZone === "all" || record.zone === filterZone)
     .slice().sort((a, b) => a.video_second - b.video_second), [records, filterEvent, filterZone]);
 
-  async function registerEvent(eventType = currentEvent) {
-    if (!eventType || !canRecord) return;
+  async function registerEvent(eventType: EventType, eventZone: Zone) {
+    if (!canRecord) return;
+    const moment: EventMoment = eventType.is_counter ? "defense" : "attack";
     const second = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? currentSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
+    const outcome = outcomeText.trim() || null;
+    const attacking = moment === "defense" ? opponent : null;
+    const defending = moment === "defense" ? team : null;
+
     if (supabase) {
       if (!cloudMatchId || !cloudUserId) { setMessage(t.noAuth); return; }
       const { data, error } = await supabase.from("match_events").insert({
-        match_id: cloudMatchId, event_type_id: eventType.id, video_second: second, zone,
-        attacking_team: eventType.is_counter ? attackingTeam : null,
-        defending_team: eventType.is_counter ? defendingTeam : null, youtube_url: videoMoment, created_by: cloudUserId,
+        match_id: cloudMatchId, event_type_id: eventType.id, video_second: second,
+        moment, zone: eventZone, outcome, attacking_team: attacking, defending_team: defending,
+        youtube_url: videoMoment, created_by: cloudUserId,
       }).select("id, created_at").single();
       if (error) { setMessage(error.message); return; }
       const saved: MatchEvent = {
         id: data.id, match_id: cloudMatchId, event_type_id: eventType.id,
-        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en, video_second: second, zone,
-        attacking_team: eventType.is_counter ? attackingTeam : null,
-        defending_team: eventType.is_counter ? defendingTeam : null, created_by: cloudUserId,
+        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
+        video_second: second, moment, zone: eventZone, outcome,
+        attacking_team: attacking, defending_team: defending, created_by: cloudUserId,
         created_at: data.created_at, youtube_url: videoMoment,
       };
       setRecords((current) => current.some((entry) => entry.id === saved.id) ? current : [...current, saved]);
@@ -328,14 +317,14 @@ export default function HomePage() {
       const localRecord: MatchEvent = {
         id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id,
         event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
-        video_second: second, zone, attacking_team: eventType.is_counter ? attackingTeam : null,
-        defending_team: eventType.is_counter ? defendingTeam : null, created_by: null,
+        video_second: second, moment, zone: eventZone, outcome,
+        attacking_team: attacking, defending_team: defending, created_by: null,
         created_at: new Date().toISOString(), youtube_url: videoMoment,
       };
       setRecords((current) => [...current, localRecord]);
       setMessage(t.created + " · " + t.saveLocal);
     }
-    setSelected(eventType.id);
+    setOutcomeText("");
   }
 
   async function removeEvent(record: MatchEvent) {
@@ -390,9 +379,7 @@ export default function HomePage() {
     if (!id) { setMessage(t.linkBad); return; }
     const opponentName = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
     setTeam(match.analyzed_team);
-    setAttackingTeam(match.analyzed_team);
     setOpponent(opponentName);
-    setDefendingTeam(opponentName);
     setVideoUrl(match.youtube_url);
     setLoadedUrl(match.youtube_url);
     setCloudMatchId(match.id);
@@ -440,8 +427,8 @@ export default function HomePage() {
 
   function exportCsv() {
     const rows = [
-      ["video_second", "event_pt", "event_en", "zone", "attacking_team", "defending_team", "youtube_url"],
-      ...filteredRecords.map((record) => [record.video_second, record.event_name_pt, record.event_name_en, record.zone,
+      ["video_second", "event_pt", "event_en", "moment", "zone", "outcome", "attacking_team", "defending_team", "youtube_url"],
+      ...filteredRecords.map((record) => [record.video_second, record.event_name_pt, record.event_name_en, record.moment, record.zone, record.outcome ?? "",
         record.attacking_team ?? "", record.defending_team ?? "", record.youtube_url]),
     ];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
@@ -449,7 +436,7 @@ export default function HomePage() {
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = "sportanalist-events.csv"; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const totalAttacks = records.filter((record) => record.event_type_id === "attack" || record.event_type_id === "attack-against").length;
+  const totalAttacks = records.filter((record) => record.moment === "attack").length;
   const totalCounters = records.filter((record) => events.find((event) => event.id === record.event_type_id)?.is_counter).length;
 
   return (
@@ -471,8 +458,8 @@ export default function HomePage() {
       {supabase && <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} />}
 
       <section className="grid gap-3 rounded-2xl border border-[#263646] bg-[#101923eb] p-4 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end">
-        <label className="block text-xs font-semibold text-[#a8b8c7]">{t.analyzed}<input className="field mt-2" value={team} onChange={(e) => { setTeam(e.target.value); setAttackingTeam(e.target.value); }} /></label>
-        <label className="block text-xs font-semibold text-[#a8b8c7]">{t.opponent}<input className="field mt-2" value={opponent} onChange={(e) => { setOpponent(e.target.value); setDefendingTeam(e.target.value); }} /></label>
+        <label className="block text-xs font-semibold text-[#a8b8c7]">{t.analyzed}<input className="field mt-2" value={team} onChange={(e) => setTeam(e.target.value)} /></label>
+        <label className="block text-xs font-semibold text-[#a8b8c7]">{t.opponent}<input className="field mt-2" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
         <label className="block text-xs font-semibold text-[#a8b8c7]">{t.youtube}<input className="field mt-2" placeholder="https://www.youtube.com/watch?v=…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} /></label>
         <button className="btn btn-primary h-[42px]" onClick={loadVideo}><Video size={16} />{t.load}</button>
       </section>
@@ -502,42 +489,72 @@ export default function HomePage() {
         <Video size={20} className="shrink-0 text-[#65e99c]" />
         <p className="muted">{t.noActiveMatch}</p>
       </div>}
-      <div className={`grid gap-5 ${hasActiveMatch ? "xl:grid-cols-[minmax(0,1.65fr)_minmax(360px,.85fr)]" : "xl:grid-cols-1"}`}>
-        <section className="panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[#263646] px-4 py-3">
-            <div><h2 className="font-semibold">{t.video}</h2><p className="muted mt-1 text-xs">{loadedUrl || t.videoHelp}</p></div>
-            <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-3 py-2 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-2 inline" size={14} />{formatTime(currentSecond)}</span>
-          </div>
-          <div className="relative aspect-video bg-black">
-            {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[#8798a8]"><Video size={38} strokeWidth={1.2} /><p className="text-sm">{t.videoHelp}</p></div>}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-            <span className="muted text-xs">{t.currentTime}</span>
-            <div className="flex items-center gap-2"><input aria-label={t.currentTime} type="number" min="0" className="field !w-24 font-mono" value={manualSecond} onChange={(e) => setManualSecond(e.target.value)} /><button className="btn" onClick={seek}><Play size={14} />{t.setTime}</button></div>
-          </div>
-        </section>
 
-        {hasActiveMatch && <section className="panel flex flex-col gap-4 p-4">
-          <div className="flex items-center justify-between"><h2 className="font-semibold">{t.capture}</h2><span className="rounded-full bg-[#35d07f18] px-2.5 py-1 text-xs text-[#66e99f]">{records.length} {t.events.toLowerCase()}</span></div>
-          <div><div className="mb-2 text-xs font-semibold text-[#9eb0c0]">{t.events}</div><div className="grid grid-cols-2 gap-2">
-            {activeEvents.map((event, index) => <button key={event.id} onClick={() => setSelected(event.id)} disabled={!canRecord} className={`flex min-h-[45px] items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm transition ${selected === event.id ? "border-[#35d07f] bg-[#35d07f18] text-[#78efa9]" : "border-[#263646] bg-[#0b131c] hover:border-[#526a7e]"}`}><span>{language === "pt" ? event.name_pt : event.name_en}</span><kbd className="kbd">{index + 1}</kbd></button>)}
-          </div></div>
-          <div><div className="mb-2 text-xs font-semibold text-[#9eb0c0]">{t.zone}</div><div className="grid grid-cols-3 gap-2">
-            {(["left", "center", "right"] as Zone[]).map((value) => <button key={value} onClick={() => setZone(value)} className={`rounded-xl border py-3 text-sm ${zone === value ? "border-[#35d07f] bg-[#35d07f18] text-[#78efa9]" : "border-[#263646] bg-[#0b131c]"}`}>{t[value]}</button>)}
-          </div></div>
-          {currentIsCounter && <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-[#9eb0c0]">{t.attackTeam}<select className="field mt-2" value={attackingTeam} onChange={(e) => setAttackingTeam(e.target.value)}><option>{team}</option><option>{opponent}</option></select></label>
-            <label className="text-xs text-[#9eb0c0]">{t.defenseTeam}<select className="field mt-2" value={defendingTeam} onChange={(e) => setDefendingTeam(e.target.value)}><option>{opponent}</option><option>{team}</option></select></label>
-          </div>}
-          <div className="flex items-center justify-between gap-2 border-t border-[#263646] pt-3">
-            <div className="min-w-0"><div className="muted text-[10px] uppercase tracking-wider">{t.selected}</div><div className="truncate text-sm font-semibold">{currentEvent ? (language === "pt" ? currentEvent.name_pt : currentEvent.name_en) : t.chooseEvent}</div></div>
-            <button disabled={!currentEvent || !canRecord} className="btn btn-primary shrink-0" onClick={() => void registerEvent()}><Plus size={16} />{t.capture}</button>
-          </div>
-          {!canRecord && (role === "viewer" || role === "configurator") && <p className="text-xs text-amber-300">{t.readOnly}</p>}
-          {!canRecord && (role === "admin" || role === "analyst") && <p className="text-xs text-[#9eb0c0]">{t.loadVideoForEvents}</p>}
-          <p className="muted text-[11px]">{t.keyboard}: {t.keyboardHint}</p>
-        </section>}
-      </div>
+      <section className="panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#263646] px-4 py-3">
+          <div><h2 className="font-semibold">{t.video}</h2><p className="muted mt-1 text-xs">{loadedUrl || t.videoHelp}</p></div>
+          <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-3 py-2 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-2 inline" size={14} />{formatTime(currentSecond)}</span>
+        </div>
+        <div className="relative aspect-video w-full bg-black">
+          {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[#8798a8]"><Video size={38} strokeWidth={1.2} /><p className="text-sm">{t.videoHelp}</p></div>}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+          <span className="muted text-xs">{t.currentTime}</span>
+          <div className="flex items-center gap-2"><input aria-label={t.currentTime} type="number" min="0" className="field !w-24 font-mono" value={manualSecond} onChange={(e) => setManualSecond(e.target.value)} /><button className="btn" onClick={seek}><Play size={14} />{t.setTime}</button></div>
+        </div>
+      </section>
+
+      {hasActiveMatch && <section className="panel flex flex-col gap-5 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h2 className="font-semibold">{t.capture}</h2><p className="muted mt-1 text-xs">{t.events} · {records.length}</p></div>
+          <span className="rounded-full bg-[#35d07f18] px-2.5 py-1 text-xs text-[#66e99f]">{formatTime(currentSecond)}</span>
+        </div>
+
+        <label className="block text-xs font-semibold text-[#a8b8c7]">
+          {t.outcome}
+          <textarea className="field mt-2 min-h-[66px] resize-y" rows={2} value={outcomeText}
+            onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
+        </label>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <section className="rounded-xl border border-[#284a3b] bg-[#0d1d19] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-[#79e9aa]">{t.attackMoment}</h3>
+              <span className="text-xs text-[#79e9aa]">{activeEvents.filter((event) => !event.is_counter).length} {t.events.toLowerCase()}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {activeEvents.filter((event) => !event.is_counter).flatMap((event) => zonesForEvent(event).map((eventZone) => ({ event, eventZone }))).map(({ event, eventZone }) => (
+                <button key={`${event.id}-${eventZone}`} disabled={!canRecord}
+                  onClick={() => void registerEvent(event, eventZone)}
+                  className="flex min-h-[64px] flex-col items-start justify-center gap-1 rounded-lg border border-[#315b47] bg-[#112820] px-3 py-2 text-left transition hover:border-[#62df98] hover:bg-[#183b2d] disabled:cursor-not-allowed disabled:opacity-40">
+                  <span className="text-sm font-semibold">{language === "pt" ? event.name_pt : event.name_en}</span>
+                  <span className="text-xs text-[#8cbea4]">{ZONE_LABELS[eventZone][language]}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[#59413a] bg-[#211713] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-[#f0b08d]">{t.defenseMoment}</h3>
+              <span className="text-xs text-[#f0b08d]">{activeEvents.filter((event) => event.is_counter).length} {t.events.toLowerCase()}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {activeEvents.filter((event) => event.is_counter).flatMap((event) => zonesForEvent(event).map((eventZone) => ({ event, eventZone }))).map(({ event, eventZone }) => (
+                <button key={`${event.id}-${eventZone}`} disabled={!canRecord}
+                  onClick={() => void registerEvent(event, eventZone)}
+                  className="flex min-h-[64px] flex-col items-start justify-center gap-1 rounded-lg border border-[#694a40] bg-[#321f19] px-3 py-2 text-left transition hover:border-[#dd9874] hover:bg-[#432a22] disabled:cursor-not-allowed disabled:opacity-40">
+                  <span className="text-sm font-semibold">{language === "pt" ? event.name_pt : event.name_en}</span>
+                  <span className="text-xs text-[#d7a38c]">{ZONE_LABELS[eventZone][language]}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {!canRecord && <p className="text-xs text-amber-300">{t.readOnly}</p>}
+        <p className="muted text-xs">Cada atalho regista automaticamente o evento, o momento, a zona e o segundo atual do vídeo.</p>
+      </section>}
 
       {hasActiveMatch && <>
       <section className="grid gap-3 sm:grid-cols-3">
@@ -554,8 +571,8 @@ export default function HomePage() {
           </div>
         </div>
         <div className="scrollbar overflow-x-auto">
-          {filteredRecords.length === 0 ? <div className="p-12 text-center"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[#172331] text-[#8da0b1]"><Activity size={20} /></div><p className="muted text-sm">{t.empty}</p></div> : <table><thead><tr><th>{t.time}</th><th>{t.event}</th><th>{t.zone}</th><th>{t.teams}</th><th>{t.action}</th></tr></thead><tbody>
-            {filteredRecords.map((record) => <tr key={record.id}><td className="font-mono text-[#7beaa8]">{formatTime(record.video_second)}</td><td>{language === "pt" ? record.event_name_pt : record.event_name_en}</td><td>{t[record.zone]}</td><td>{record.attacking_team ? `${record.attacking_team} → ${record.defending_team}` : "—"}</td><td><div className="flex items-center gap-1"><a className="btn !px-2 !py-1.5 text-xs" href={record.youtube_url || "#"} target="_blank" rel="noreferrer"><Link2 size={13} />{t.open}</a><button aria-label={t.delete} className="btn !px-2 !py-1.5 text-xs text-red-300" onClick={() => void removeEvent(record)}><Trash2 size={13} /></button></div></td></tr>)}
+          {filteredRecords.length === 0 ? <div className="p-12 text-center"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[#172331] text-[#8da0b1]"><Activity size={20} /></div><p className="muted text-sm">{t.empty}</p></div> : <table><thead><tr><th>{t.time}</th><th>{t.event}</th><th>Momento</th><th>{t.zone}</th><th>{t.teams}</th><th>Resultado</th><th>{t.action}</th></tr></thead><tbody>
+            {filteredRecords.map((record) => <tr key={record.id}><td className="font-mono text-[#7beaa8]">{formatTime(record.video_second)}</td><td>{language === "pt" ? record.event_name_pt : record.event_name_en}</td><td>{record.moment === "attack" ? t.attackMoment : t.defenseMoment}</td><td>{t[record.zone]}</td><td>{record.attacking_team ? `${record.attacking_team} → ${record.defending_team}` : "—"}</td><td className="max-w-[220px] truncate" title={record.outcome ?? ""}>{record.outcome || "—"}</td><td><div className="flex items-center gap-1"><a className="btn !px-2 !py-1.5 text-xs" href={record.youtube_url || "#"} target="_blank" rel="noreferrer"><Link2 size={13} />{t.open}</a><button aria-label={t.delete} className="btn !px-2 !py-1.5 text-xs text-red-300" onClick={() => void removeEvent(record)}><Trash2 size={13} /></button></div></td></tr>)}
           </tbody></table>}
         </div>
       </section>
