@@ -52,7 +52,7 @@ const COPY = {
     matchHelp: "Cada jogo tem uma equipa analisada, adversário e vídeo próprio.", noVideo: "Sem vídeo",
     keyboard: "Atalhos", keyboardHint: "Teclas 1–9 registam diretamente o evento correspondente.",
     role: "Perfil", viewer: "Observador", analyst: "Analista", admin: "Administrador", configurator: "Configurador",
-    readOnly: "Perfil de visualização: registo desativado.", setup: "Configuração de serviços", setupHint: "Para colaboração em tempo real, configure as variáveis Supabase e aplique a migração SQL.",
+    readOnly: "O teu perfil tem permissões apenas de leitura.", loadVideoForEvents: "Carrega um vídeo do jogo para ativar o registo de eventos.", setup: "Configuração de serviços", setupHint: "Para colaboração em tempo real, configure as variáveis Supabase e aplique a migração SQL.",
     statsTotal: "Total de eventos", roleDemo: "Perfil demonstrativo", noAuth: "A autenticação será ativada quando Supabase estiver configurado.",
     eventRequired: "Preenche os nomes do evento.", saveError: "Não foi possível guardar no servidor. O registo foi mantido localmente.",
     members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
@@ -77,7 +77,7 @@ const COPY = {
     matchHelp: "Each match has an analysed team, opponent and its own video.", noVideo: "No video",
     keyboard: "Shortcuts", keyboardHint: "Keys 1–9 record the corresponding event directly.",
     role: "Role", viewer: "Viewer", analyst: "Analyst", admin: "Administrator", configurator: "Configurator",
-    readOnly: "Viewer role: event recording is disabled.", setup: "Service configuration", setupHint: "For real-time collaboration, configure Supabase environment variables and apply the SQL migration.",
+    readOnly: "Your role has read-only permissions.", loadVideoForEvents: "Load a match video to enable event recording.", setup: "Service configuration", setupHint: "For real-time collaboration, configure Supabase environment variables and apply the SQL migration.",
     statsTotal: "Total events", roleDemo: "Demo role", noAuth: "Authentication will be enabled once Supabase is configured.",
     eventRequired: "Enter both event names.", saveError: "Could not save to server. The event was kept locally.",
     members: "Manage users", memberEmail: "User email", memberRole: "Role", addMember: "Add user", memberHint: "The user must create an account first. The role is applied to this project and enforced by the database.", memberAdded: "User added to the project.",
@@ -454,7 +454,8 @@ export default function HomePage() {
             <div className="min-w-0"><div className="muted text-[10px] uppercase tracking-wider">{t.selected}</div><div className="truncate text-sm font-semibold">{currentEvent ? (language === "pt" ? currentEvent.name_pt : currentEvent.name_en) : t.chooseEvent}</div></div>
             <button disabled={!currentEvent || !canRecord} className="btn btn-primary shrink-0" onClick={() => void registerEvent()}><Plus size={16} />{t.capture}</button>
           </div>
-          {!canRecord && <p className="text-xs text-amber-300">{t.readOnly}</p>}
+          {!canRecord && (role === "viewer" || role === "configurator") && <p className="text-xs text-amber-300">{t.readOnly}</p>}
+          {!canRecord && (role === "admin" || role === "analyst") && <p className="text-xs text-[#9eb0c0]">{t.loadVideoForEvents}</p>}
           <p className="muted text-[11px]">{t.keyboard}: {t.keyboardHint}</p>
         </section>
       </div>
