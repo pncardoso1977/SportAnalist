@@ -31,11 +31,12 @@ Nunca colocar chaves secretas no frontend.
 - `viewer`: apenas leitura
 
 ## Publicação
-Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar a migração SQL e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md).
+Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql` e `0002_event_moment_and_outcome.sql` e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md).
 
 ## Funcionalidades implementadas
 - Player YouTube com leitura do segundo atual e links diretos para cada evento.
-- Nove eventos iniciais, tipos personalizados bilingues e zona esquerda/central/direita.
+- Catálogo bilingue de eventos com combinações de momento e zona; inclui laterais, cantos, livres, saída de bola, saída de redes, saída de baliza, ataque e golo.
+- Player a toda a largura; cada botão de evento/zona grava automaticamente o segundo do vídeo, momento (ataque/defesa), zona e resultado/observação opcional.
 - Identificação de ataque e defesa nos eventos de contra.
 - Atalhos de teclado 1–9, cronologia, filtros, indicadores e exportação CSV.
 - Autenticação Supabase, criação de projeto com primeiro administrador e gestão de membros por email/perfil (quando Supabase está configurado).
