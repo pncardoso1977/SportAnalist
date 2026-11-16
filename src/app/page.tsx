@@ -156,6 +156,7 @@ export default function HomePage() {
       const saved = localStorage.getItem("sportanalist-demo");
       if (saved) {
         const data = JSON.parse(saved);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate the local-only demo store once.
         if (Array.isArray(data.records)) setRecords(data.records);
         if (Array.isArray(data.events)) setEvents(data.events);
       }
