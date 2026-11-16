@@ -156,15 +156,8 @@ export default function HomePage() {
       const saved = localStorage.getItem("sportanalist-demo");
       if (saved) {
         const data = JSON.parse(saved);
-        if (Array.isArray(data.records)) {
-          // The browser-only demo store is hydrated after the first render.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setRecords(data.records);
-        }
-        if (Array.isArray(data.events)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setEvents(data.events);
-        }
+        if (Array.isArray(data.records)) setRecords(data.records);
+        if (Array.isArray(data.events)) setEvents(data.events);
       }
     } catch { /* Ignore malformed local demo data. */ }
   }, []);
@@ -338,6 +331,7 @@ export default function HomePage() {
         if (error || !match) { setMessage(error?.message ?? t.saveError); return; }
         matchId = match.id;
       }
+      if (!matchId) { setMessage(t.saveError); return; }
       setCloudMatchId(matchId);
       setRecords([]);
     } else {
