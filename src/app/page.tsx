@@ -210,10 +210,7 @@ export default function HomePage() {
   }, [supabase, projectId, cloudMatchId]);
 
   useEffect(() => {
-    if (!supabase || !projectId) {
-      setMatches([]);
-      return;
-    }
+    if (!supabase || !projectId) return;
     let cancelled = false;
     const loadMatches = async () => {
       const { data, error } = await supabase.from("matches")
