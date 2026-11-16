@@ -35,10 +35,13 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
       setNeedsProject(false);
       onWorkspaceReady(member.project_id, id, member.role, project?.analyzed_team);
     };
-    void supabase.auth.getUser().then(({ data, error }) => {
+    // getUser returns "Auth session missing" when a visitor is not signed in.
+    // A missing session is the normal initial state, not an application error.
+    void supabase.auth.getSession().then(({ data, error }) => {
       if (cancelled) return;
-      if (error) setNotice(error.message);
-      if (data.user) { setUserId(data.user.id); void loadMembership(data.user.id); }
+      if (error) { setNotice(error.message); return; }
+      const user = data.session?.user;
+      if (user) { setUserId(user.id); void loadMembership(user.id); }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
