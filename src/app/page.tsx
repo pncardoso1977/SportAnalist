@@ -114,11 +114,12 @@ export default function HomePage() {
   const [cloudMatchId, setCloudMatchId] = useState<string | null>(null);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventTypesRef = useRef(events);
   const t = COPY[language];
   const supabase = useMemo(() => getSupabase(), []);
 
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
-  const canRecord = supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst";
+  const canRecord = Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
     if (teamName) { setTeam(teamName); setAttackingTeam(teamName); }
@@ -129,6 +130,8 @@ export default function HomePage() {
   const activeEvents = events.filter((event) => event.active);
   const currentEvent = events.find((event) => event.id === selected);
   const currentIsCounter = Boolean(currentEvent?.is_counter);
+
+  useEffect(() => { eventTypesRef.current = events; }, [events]);
 
   useEffect(() => {
     try {
@@ -171,7 +174,7 @@ export default function HomePage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events", filter: `match_id=eq.${cloudMatchId}` }, (payload) => {
         if (payload.eventType === "INSERT") {
           const row = payload.new as any;
-          const eventType = events.find((event) => event.id === row.event_type_id);
+          const eventType = eventTypesRef.current.find((event) => event.id === row.event_type_id);
           setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
             id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
             event_name_pt: eventType?.name_pt ?? "Evento", event_name_en: eventType?.name_en ?? "Event",
@@ -181,7 +184,7 @@ export default function HomePage() {
         } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as any).id));
       }).subscribe() : null;
     return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
-  }, [supabase, projectId, cloudMatchId, events]);
+  }, [supabase, projectId, cloudMatchId]);
 
   const refreshClock = useCallback(() => {
     const second = playerRef.current?.getCurrentTime?.();
@@ -299,12 +302,19 @@ export default function HomePage() {
     if (!id) { setMessage(t.linkBad); return; }
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
-      const { data: match, error } = await supabase.from("matches").insert({
-        project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
-        youtube_url: videoUrl.trim(), created_by: cloudUserId,
-      }).select("id").single();
-      if (error || !match) { setMessage(error?.message ?? t.saveError); return; }
-      setCloudMatchId(match.id);
+      const { data: existing } = await supabase.from("matches").select("id")
+        .eq("project_id", projectId).eq("home_team", team).eq("away_team", opponent)
+        .eq("youtube_url", videoUrl.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let matchId = existing?.id as string | undefined;
+      if (!matchId) {
+        const { data: match, error } = await supabase.from("matches").insert({
+          project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
+          youtube_url: videoUrl.trim(), created_by: cloudUserId,
+        }).select("id").single();
+        if (error || !match) { setMessage(error?.message ?? t.saveError); return; }
+        matchId = match.id;
+      }
+      setCloudMatchId(matchId);
       setRecords([]);
     } else {
       setCloudMatchId(null);
