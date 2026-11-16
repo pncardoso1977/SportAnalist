@@ -1,5 +1,6 @@
 export type AppRole = "admin" | "analyst" | "configurator" | "viewer";
 export type Zone = "left" | "center" | "right";
+export type EventMoment = "attack" | "defense";
 
 export type EventType = {
   id: string;
@@ -17,7 +18,9 @@ export type MatchEvent = {
   event_name_pt: string;
   event_name_en: string;
   video_second: number;
+  moment: EventMoment;
   zone: Zone;
+  outcome: string | null;
   attacking_team: string | null;
   defending_team: string | null;
   created_by: string | null;
@@ -44,6 +47,9 @@ export const DEFAULT_EVENT_TYPES: EventType[] = [
   { id: "kick-off", name_pt: "Saída de bola", name_en: "Kick-off", is_counter: false, active: true, sort_order: 70 },
   { id: "attack", name_pt: "Ataque", name_en: "Attack", is_counter: false, active: true, sort_order: 80 },
   { id: "attack-against", name_pt: "Ataque Contra", name_en: "Opposition attack", is_counter: true, active: true, sort_order: 90 },
+  { id: "net-release", name_pt: "Saída de redes", name_en: "Goalkeeper distribution", is_counter: false, active: true, sort_order: 100 },
+  { id: "goal-kick", name_pt: "Saída de baliza", name_en: "Goal kick", is_counter: false, active: true, sort_order: 110 },
+  { id: "goal", name_pt: "Golo", name_en: "Goal", is_counter: false, active: true, sort_order: 120 },
 ];
 
 export const ZONE_LABELS: Record<Zone, { pt: string; en: string }> = {
