@@ -9,9 +9,10 @@ type Props = {
   supabase: SupabaseClient;
   onWorkspaceReady: (projectId: string, userId: string, role: AppRole, teamName?: string) => void;
   onSignOut: () => void;
+  hideAuthenticatedBar?: boolean;
 };
 
-export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
+export function CloudSetup({ supabase, onWorkspaceReady, onSignOut, hideAuthenticatedBar = false }: Props) {
   const [userId, setUserId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -124,6 +125,8 @@ export function CloudSetup({ supabase, onWorkspaceReady, onSignOut }: Props) {
       {notice && <p role="status" className="md:col-span-3 text-xs text-amber-300">{notice}</p>}
     </section>
   );
+
+  if (hideAuthenticatedBar) return null;
 
   return (
     <section className="panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
