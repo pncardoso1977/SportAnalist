@@ -67,9 +67,9 @@ tbody tr:hover { background: #ffffff06; }
   min-width: 0;
 }
 .video-stage {
-  /* Target 80% of the visible viewport height; width follows the 16:9 ratio.
+  /* Target 70% of the visible viewport height; width follows the 16:9 ratio.
      The available parent width remains the only constraint when side controls are visible. */
-  width: min(100%, calc(80svh * 16 / 9));
+  width: min(100%, calc(70svh * 16 / 9));
   height: auto;
   max-height: none;
   aspect-ratio: 16 / 9;
