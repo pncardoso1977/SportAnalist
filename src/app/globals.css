@@ -61,9 +61,9 @@ tbody tr:hover { background: #ffffff06; }
   min-width: 0;
 }
 .video-stage {
-  width: min(100%, calc(min(46svh, 380px) * 1.77778));
+  width: min(100%, calc(min(49svh, 410px) * 1.77778));
   height: auto;
-  max-height: min(46svh, 380px);
+  max-height: min(49svh, 410px);
   aspect-ratio: 16 / 9;
   background: #000;
   margin-left: 0;
