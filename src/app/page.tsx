@@ -9,8 +9,10 @@ import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, typ
 import { getSupabase } from "@/lib/supabase";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
+import { analyzeYouTubeGoals, isFirebaseAIConfigured, type DetectedGoal } from "@/lib/firebase-ai";
 
 type Language = "pt" | "en";
+type AiGoalSuggestion = DetectedGoal & { id: string; confirmed: boolean };
 type YouTubePlayer = {
   getCurrentTime: () => number;
   destroy: () => void;
@@ -55,6 +57,15 @@ const COPY = {
     statsTotal: "Total de eventos", matchHistory: "Histórico de jogos", noMatches: "Ainda não existem jogos guardados neste projeto.", openMatch: "Abrir jogo", savedOn: "Guardado em", matchOpened: "Jogo carregado do histórico.", roleDemo: "Perfil demonstrativo", noAuth: "A autenticação será ativada quando Supabase estiver configurado.",
     eventRequired: "Preenche os nomes do evento.", saveError: "Não foi possível guardar no servidor. O registo foi mantido localmente.",
     members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
+    aiTitle: "Deteção de golos com IA", aiHint: "Analisa diretamente o URL do YouTube (também funciona com vídeos não listados). A IA sugere momentos; confirma cada golo antes de o guardar.",
+    aiRun: "Procurar golos com IA", aiRunning: "A analisar vídeo…", aiNotConfigured: "Firebase AI Logic não está configurado. Adiciona as credenciais Firebase e a chave reCAPTCHA App Check às variáveis de ambiente.",
+    aiConsent: "Autorizo o envio do vídeo e do respetivo áudio/imagem para análise pelo Google Gemini. No nível gratuito, os conteúdos podem ser utilizados pela Google para melhorar os seus produtos.",
+    aiConsentRequired: "É necessário confirmar a autorização de análise antes de enviar o vídeo.",
+    aiAnalyzedKit: "Equipamento da equipa analisada", aiOpponentKit: "Equipamento do adversário",
+    aiSide: "Equipa que marcou", aiUncertain: "Por confirmar", aiMarker: "Marcador", aiEvidence: "Evidência", aiConfidence: "Confiança",
+    aiZone: "Zona", aiConfirm: "Confirmar e registar golo", aiConfirmed: "Golo registado", aiNoGoals: "A IA não identificou golos candidatos.",
+    aiError: "Não foi possível analisar o vídeo.", aiDuplicate: "Já existe um golo registado perto deste timestamp.",
+
   },
   en: {
     subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed", sideMenu: "Menu", closeMenu: "Close menu", newMatch: "New match", savedMatches: "Saved matches", currentMatch: "Active match", mobileViewOnly: "On a phone, events are read-only. Use a tablet or computer to record events.",
@@ -79,6 +90,15 @@ const COPY = {
     statsTotal: "Total events", matchHistory: "Match history", noMatches: "No matches have been saved in this project yet.", openMatch: "Open match", savedOn: "Saved on", matchOpened: "Match loaded from history.", roleDemo: "Demo role", noAuth: "Authentication will be enabled once Supabase is configured.",
     eventRequired: "Enter both event names.", saveError: "Could not save to server. The event was kept locally.",
     members: "Manage users", memberEmail: "User email", memberRole: "Role", addMember: "Add user", memberHint: "The user must create an account first. The role is applied to this project and enforced by the database.", memberAdded: "User added to the project.",
+    aiTitle: "AI goal detection", aiHint: "Analyses the YouTube URL directly (unlisted videos are supported). AI suggests moments; confirm each goal before saving it.",
+    aiRun: "Find goals with AI", aiRunning: "Analysing video…", aiNotConfigured: "Firebase AI Logic is not configured. Add the Firebase settings and App Check reCAPTCHA key to the environment variables.",
+    aiConsent: "I authorise this video's image and audio to be sent to Google Gemini for analysis. On the free tier, content may be used by Google to improve its products.",
+    aiConsentRequired: "You must confirm consent before submitting the video for analysis.",
+    aiAnalyzedKit: "Analysed team's kit", aiOpponentKit: "Opponent's kit",
+    aiSide: "Scoring team", aiUncertain: "Unconfirmed", aiMarker: "Scorer", aiEvidence: "Evidence", aiConfidence: "Confidence",
+    aiZone: "Zone", aiConfirm: "Confirm and register goal", aiConfirmed: "Goal registered", aiNoGoals: "AI did not identify any goal candidates.",
+    aiError: "Could not analyse the video.", aiDuplicate: "A goal is already registered near this timestamp.",
+
   },
 } as const;
 
@@ -152,6 +172,13 @@ export default function HomePage() {
   const [publicShareUrl, setPublicShareUrl] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const shareRequestRef = useRef(0);
+  const [aiCandidates, setAiCandidates] = useState<AiGoalSuggestion[]>([]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiConsent, setAiConsent] = useState(false);
+  const [aiAnalyzedKit, setAiAnalyzedKit] = useState("Amarelo");
+  const [aiOpponentKit, setAiOpponentKit] = useState("Azul");
   const [matches, setMatches] = useState<Match[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const playerRef = useRef<YouTubePlayer | null>(null);
@@ -315,12 +342,18 @@ export default function HomePage() {
     return timeDifference || records.indexOf(b) - records.indexOf(a);
   }), [records]);
 
-  async function registerEvent(eventType: EventType, eventZone: Zone, moment: EventMoment) {
-    if (!canRecord) return;
+  async function registerEvent(
+    eventType: EventType,
+    eventZone: Zone,
+    moment: EventMoment,
+    secondOverride?: number,
+    outcomeOverride?: string | null,
+  ): Promise<boolean> {
+    if (!canRecord) return false;
     const eventNames = eventNamesForMoment(eventType, moment);
-    const second = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? currentSecond));
+    const second = Math.max(0, Math.floor(secondOverride ?? playerRef.current?.getCurrentTime?.() ?? currentSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
-    const outcome = outcomeText.trim() || null;
+    const outcome = outcomeOverride === undefined ? (outcomeText.trim() || null) : (outcomeOverride?.trim() || null);
 
     // The event belongs to the team whose phase is being analysed:
     // attack -> analysed team; defence -> opponent.
@@ -329,7 +362,7 @@ export default function HomePage() {
     const defending = moment === "attack" ? opponent : team;
 
     if (supabase) {
-      if (!cloudMatchId || !cloudUserId || !projectId) { setMessage(t.noAuth); return; }
+      if (!cloudMatchId || !cloudUserId || !projectId) { setMessage(t.noAuth); return false; }
 
       const { data: eventTeam, error: teamError } = await supabase.from("teams")
         .upsert({ project_id: projectId, name: eventTeamName.trim() }, { onConflict: "project_id,normalized_name" })
@@ -337,7 +370,7 @@ export default function HomePage() {
         .single();
       if (teamError || !eventTeam) {
         setMessage(teamError?.message ?? t.saveError);
-        return;
+        return false;
       }
 
       const { data, error } = await supabase.from("match_events").insert({
@@ -346,7 +379,7 @@ export default function HomePage() {
         attacking_team: attacking, defending_team: defending,
         youtube_url: videoMoment, created_by: cloudUserId,
       }).select("id, team_id, created_at").single();
-      if (error) { setMessage(error.message); return; }
+      if (error) { setMessage(error.message); return false; }
       const saved: MatchEvent = {
         id: data.id, match_id: cloudMatchId, event_type_id: eventType.id, team_id: data.team_id,
         event_name_pt: eventNames.pt, event_name_en: eventNames.en,
@@ -367,7 +400,88 @@ export default function HomePage() {
       setRecords((current) => [localRecord, ...current]);
       setMessage(t.created + " · " + t.saveLocal);
     }
-    setOutcomeText("");
+    if (outcomeOverride === undefined) setOutcomeText("");
+    return true;
+  }
+
+  async function runAiGoalDetection() {
+    if (!canRecord || aiBusy) return;
+    if (!isFirebaseAIConfigured()) {
+      setAiError(t.aiNotConfigured);
+      return;
+    }
+    if (!aiConsent) {
+      setAiError(t.aiConsentRequired);
+      return;
+    }
+    setAiBusy(true);
+    setAiError("");
+    setAiStatus("");
+    setAiCandidates([]);
+    try {
+      const detected = await analyzeYouTubeGoals({
+        youtubeUrl: loadedUrl,
+        analyzedTeam: team,
+        opponent,
+        analyzedTeamKit: aiAnalyzedKit,
+        opponentKit: aiOpponentKit,
+      });
+      const candidates = detected.map((goal, index) => ({
+        ...goal,
+        id: `${goal.second}-${index}`,
+        confirmed: false,
+      }));
+      setAiCandidates(candidates);
+      if (candidates.length === 0) setAiStatus(t.aiNoGoals);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : t.aiError);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function updateAiCandidate(id: string, changes: Partial<AiGoalSuggestion>) {
+    setAiCandidates((current) => current.map((candidate) =>
+      candidate.id === id ? { ...candidate, ...changes } : candidate
+    ));
+  }
+
+  async function confirmAiGoal(candidate: AiGoalSuggestion) {
+    if (candidate.confirmed || candidate.scoringSide === "uncertain" || !canRecord) return;
+    const goalType = events.find((event) => event.id === "goal")
+      ?? events.find((event) => event.name_pt.trim().toLocaleLowerCase("pt-PT") === "golo");
+    if (!goalType) {
+      setAiError(language === "pt" ? "O tipo de evento Golo não está configurado." : "The Goal event type is not configured.");
+      return;
+    }
+
+    const moment: EventMoment = candidate.scoringSide === "analysed" ? "attack" : "defense";
+    const duplicate = records.some((record) =>
+      record.event_type_id === goalType.id &&
+      record.moment === moment &&
+      Math.abs(record.video_second - candidate.second) <= 3
+    );
+    if (duplicate) {
+      setAiStatus(t.aiDuplicate);
+      updateAiCandidate(candidate.id, { confirmed: true });
+      return;
+    }
+
+    const marker = [
+      candidate.playerNumber ? `N.º ${candidate.playerNumber}` : "",
+      candidate.playerName ?? "",
+    ].filter(Boolean).join(" ");
+    const outcome = [
+      marker,
+      candidate.evidence,
+      `IA: ${Math.round(candidate.confidence * 100)}%`,
+    ].filter(Boolean).join(" · ").slice(0, 500);
+
+    const saved = await registerEvent(goalType, candidate.zone, moment, candidate.second, outcome);
+    if (saved) {
+      updateAiCandidate(candidate.id, { confirmed: true });
+      setAiStatus(t.aiConfirmed);
+    }
   }
 
   function seekToEvent(record: MatchEvent) {
@@ -393,6 +507,9 @@ export default function HomePage() {
   }
 
   async function loadVideo() {
+    setAiCandidates([]);
+    setAiError("");
+    setAiStatus("");
     const id = parseYouTubeId(videoUrl);
     if (!id) { setMessage(t.linkBad); return; }
     if (supabase) {
@@ -431,6 +548,9 @@ export default function HomePage() {
   }
 
   function openSavedMatch(match: Match) {
+    setAiCandidates([]);
+    setAiError("");
+    setAiStatus("");
     const id = parseYouTubeId(match.youtube_url);
     if (!id) { setMessage(t.linkBad); return; }
     const opponentName = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
@@ -743,6 +863,73 @@ export default function HomePage() {
                     <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
                   </tr>)}</tbody>
                 </table>
+              </div>}
+            </section>
+            <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
+                <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
+              </div>
+              <p className="muted mt-1 text-[10px]">{t.aiHint}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
+                  {t.aiAnalyzedKit}
+                  <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiAnalyzedKit} onChange={(event) => setAiAnalyzedKit(event.target.value)} />
+                </label>
+                <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
+                  {t.aiOpponentKit}
+                  <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiOpponentKit} onChange={(event) => setAiOpponentKit(event.target.value)} />
+                </label>
+              </div>
+              <label className="mt-2 flex cursor-pointer items-start gap-2 text-[9px] leading-relaxed text-[#a8b8c7]">
+                <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} />
+                <span>{t.aiConsent}</span>
+              </label>
+              {!isFirebaseAIConfigured() && <p className="mt-2 text-[10px] text-amber-300">{t.aiNotConfigured}</p>}
+              <button type="button" className="btn btn-primary mt-2 w-full !py-2 text-[10px]"
+                disabled={!canRecord || aiBusy || !aiConsent || !isFirebaseAIConfigured()}
+                onClick={() => void runAiGoalDetection()}>
+                <Activity size={13} />{aiBusy ? t.aiRunning : t.aiRun}
+              </button>
+              {aiError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{aiError}</p>}
+              {aiStatus && <p role="status" className="mt-2 text-[10px] text-[#79e9aa]">{aiStatus}</p>}
+              {aiCandidates.length > 0 && <div className="mt-2 grid gap-2">
+                {aiCandidates.map((candidate) => (
+                  <article key={candidate.id} className="rounded-md border border-[#31475a] bg-[#101923] p-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button type="button" className="font-mono text-[11px] font-semibold text-[#7beaa8] hover:underline"
+                        onClick={() => { playerRef.current?.seekTo(candidate.second, true); setCurrentSecond(candidate.second); }}>
+                        {formatTime(candidate.second)}
+                      </button>
+                      <span className="text-[9px] text-[#9eb0c0]">{t.aiConfidence}: {Math.round(candidate.confidence * 100)}%</span>
+                    </div>
+                    {(candidate.playerName || candidate.playerNumber) && <p className="mt-1 text-[10px] font-semibold">{t.aiMarker}: {candidate.playerNumber ? `N.º ${candidate.playerNumber} ` : ""}{candidate.playerName ?? ""}</p>}
+                    <label className="mt-2 block text-[9px] text-[#a8b8c7]">
+                      {t.aiSide}
+                      <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.scoringSide}
+                        onChange={(event) => updateAiCandidate(candidate.id, { scoringSide: event.target.value as AiGoalSuggestion["scoringSide"] })}>
+                        <option value="uncertain">{t.aiUncertain}</option>
+                        <option value="analysed">{team}</option>
+                        <option value="opponent">{opponent}</option>
+                      </select>
+                    </label>
+                    <label className="mt-2 block text-[9px] text-[#a8b8c7]">
+                      {t.aiZone}
+                      <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.zone}
+                        onChange={(event) => updateAiCandidate(candidate.id, { zone: event.target.value as Zone })}>
+                        <option value="left">{ZONE_LABELS.left[language]}</option>
+                        <option value="center">{ZONE_LABELS.center[language]}</option>
+                        <option value="right">{ZONE_LABELS.right[language]}</option>
+                      </select>
+                    </label>
+                    {candidate.evidence && <p className="mt-2 text-[9px] leading-relaxed text-[#a8b8c7]">{t.aiEvidence}: {candidate.evidence}</p>}
+                    <button type="button" className="btn mt-2 w-full !py-1.5 text-[9px]"
+                      disabled={candidate.confirmed || candidate.scoringSide === "uncertain" || !canRecord}
+                      onClick={() => void confirmAiGoal(candidate)}>
+                      {candidate.confirmed ? t.aiConfirmed : t.aiConfirm}
+                    </button>
+                  </article>
+                ))}
               </div>}
             </section>
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
