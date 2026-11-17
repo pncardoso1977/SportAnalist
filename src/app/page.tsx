@@ -25,7 +25,7 @@ type YouTubePlayerApi = {
 };
 type PlayerWindow = Window & { YT?: YouTubePlayerApi; onYouTubeIframeAPIReady?: () => void };
 type DbMatchEventRow = {
-  id: string; match_id: string; event_type_id: string; video_second: number; moment: EventMoment; zone: Zone; outcome: string | null;
+  id: string; match_id: string; event_type_id: string; team_id: string; video_second: number; moment: EventMoment; zone: Zone; outcome: string | null;
   attacking_team: string | null; defending_team: string | null; created_by: string | null;
   created_at: string; youtube_url: string;
   event_types?: { name_pt: string; name_en: string } | null;
@@ -200,7 +200,7 @@ export default function HomePage() {
         const { data: rows } = await supabase.from("match_events")
           .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("created_at", { ascending: false });
         if (rows && !cancelled) setRecords((rows as DbMatchEventRow[]).map((row) => ({
-          id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
+          id: row.id, match_id: row.match_id, event_type_id: row.event_type_id, team_id: row.team_id,
           event_name_pt: row.event_types ? eventNamesForMoment(row.event_types as EventType, row.moment).pt : "Evento",
           event_name_en: row.event_types ? eventNamesForMoment(row.event_types as EventType, row.moment).en : "Event",
           video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
@@ -216,7 +216,7 @@ export default function HomePage() {
           const row = payload.new as DbMatchEventRow;
           const eventType = eventTypesRef.current.find((event) => event.id === row.event_type_id);
           setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [{
-            id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
+            id: row.id, match_id: row.match_id, event_type_id: row.event_type_id, team_id: row.team_id,
             event_name_pt: eventType ? eventNamesForMoment(eventType, row.moment).pt : "Evento",
             event_name_en: eventType ? eventNamesForMoment(eventType, row.moment).en : "Event",
             video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
@@ -314,19 +314,34 @@ export default function HomePage() {
     const second = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? currentSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
     const outcome = outcomeText.trim() || null;
-    const attacking = moment === "defense" ? opponent : null;
-    const defending = moment === "defense" ? team : null;
+
+    // The event belongs to the team whose phase is being analysed:
+    // attack -> analysed team; defence -> opponent.
+    const eventTeamName = moment === "attack" ? team : opponent;
+    const attacking = moment === "attack" ? team : opponent;
+    const defending = moment === "attack" ? opponent : team;
 
     if (supabase) {
-      if (!cloudMatchId || !cloudUserId) { setMessage(t.noAuth); return; }
+      if (!cloudMatchId || !cloudUserId || !projectId) { setMessage(t.noAuth); return; }
+
+      const { data: eventTeam, error: teamError } = await supabase.from("teams")
+        .upsert({ project_id: projectId, name: eventTeamName.trim() }, { onConflict: "project_id,normalized_name" })
+        .select("id")
+        .single();
+      if (teamError || !eventTeam) {
+        setMessage(teamError?.message ?? t.saveError);
+        return;
+      }
+
       const { data, error } = await supabase.from("match_events").insert({
-        match_id: cloudMatchId, event_type_id: eventType.id, video_second: second,
-        moment, zone: eventZone, outcome, attacking_team: attacking, defending_team: defending,
+        match_id: cloudMatchId, event_type_id: eventType.id, team_id: eventTeam.id,
+        video_second: second, moment, zone: eventZone, outcome,
+        attacking_team: attacking, defending_team: defending,
         youtube_url: videoMoment, created_by: cloudUserId,
-      }).select("id, created_at").single();
+      }).select("id, team_id, created_at").single();
       if (error) { setMessage(error.message); return; }
       const saved: MatchEvent = {
-        id: data.id, match_id: cloudMatchId, event_type_id: eventType.id,
+        id: data.id, match_id: cloudMatchId, event_type_id: eventType.id, team_id: data.team_id,
         event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
         attacking_team: attacking, defending_team: defending, created_by: cloudUserId,
@@ -336,7 +351,7 @@ export default function HomePage() {
       setMessage(t.saveCloud);
     } else {
       const localRecord: MatchEvent = {
-        id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id,
+        id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id, team_id: null,
         event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
         attacking_team: attacking, defending_team: defending, created_by: null,
