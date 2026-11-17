@@ -16,7 +16,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador, configure as variáveis Supabase e aplique, por ordem, as migrações `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql` e `0003_team_event_association.sql`.
+Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador, configure as variáveis Supabase e aplique, por ordem, as migrações `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql` e `0003_team_event_association.sql` e `0004_public_match_sharing.sql`.
 
 ## Variáveis de ambiente
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -31,7 +31,7 @@ Nunca colocar chaves secretas no frontend.
 - `viewer`: apenas leitura
 
 ## Publicação
-Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql` e `0003_team_event_association.sql` e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md).
+Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql` e `0003_team_event_association.sql`, `0004_public_match_sharing.sql` e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md).
 
 ## Funcionalidades implementadas
 - Player YouTube com leitura do segundo atual e links diretos para cada evento.
@@ -43,6 +43,7 @@ Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do
 - Autenticação Supabase, criação de projeto com primeiro administrador e gestão de membros por email/perfil (quando Supabase está configurado).
 - Persistência local em modo demonstração.
 - Persistência de jogos/eventos e atualizações em tempo real na mesma partida quando Supabase está configurado.
+- Partilha pública individual por jogo, com token aleatório, página de consulta de vídeo/cronologia e possibilidade de revogação pelo editor.
 
 ## Estado e pré-requisitos de produção
 O código e a migração estão no repositório; a publicação online ainda não foi ativada. É necessário criar o projeto Supabase, aplicar a migração e importar o repositório na Vercel seguindo [docs/deployment.md](docs/deployment.md). Os planos gratuitos têm quotas e não equivalem a serviço sem limites.
