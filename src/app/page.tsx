@@ -583,7 +583,7 @@ export default function HomePage() {
                               <button type="button" disabled={!canRecord} title={`${language === "pt" ? event.name_pt : event.name_en} · ${ZONE_LABELS[eventZone][language]}`}
                                 aria-label={`Registar ${language === "pt" ? event.name_pt : event.name_en} · ${ZONE_LABELS[eventZone][language]}`}
                                 onClick={() => void registerEvent(event, eventZone)}
-                                className={`flex h-6 w-7 items-center justify-center rounded border ${momentColor.button} disabled:cursor-not-allowed disabled:opacity-35`}>
+                                className={`event-shortcut flex h-5 w-6 items-center justify-center rounded border ${momentColor.button} disabled:cursor-not-allowed disabled:opacity-35`}>
                                 <Plus size={11} className={momentColor.icon} />
                               </button>
                             </div>
