@@ -120,7 +120,6 @@ export default function HomePage() {
   const [loadedUrl, setLoadedUrl] = useState("");
   const [videoId, setVideoId] = useState("");
   const [currentSecond, setCurrentSecond] = useState(0);
-  const [manualSecond, setManualSecond] = useState("0");
   const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENT_TYPES);
   const [records, setRecords] = useState<MatchEvent[]>([]);
   const [outcomeText, setOutcomeText] = useState("");
@@ -184,7 +183,7 @@ export default function HomePage() {
       if (!cancelled && !typeError && types?.length) setEvents(types as EventType[]);
       if (cloudMatchId) {
         const { data: rows } = await supabase.from("match_events")
-          .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("video_second");
+          .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("created_at", { ascending: false });
         if (rows && !cancelled) setRecords((rows as DbMatchEventRow[]).map((row) => ({
           id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
           event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
@@ -200,12 +199,12 @@ export default function HomePage() {
         if (payload.eventType === "INSERT") {
           const row = payload.new as DbMatchEventRow;
           const eventType = eventTypesRef.current.find((event) => event.id === row.event_type_id);
-          setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [...current, {
+          setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [{
             id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
             event_name_pt: eventType?.name_pt ?? "Evento", event_name_en: eventType?.name_en ?? "Event",
             video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
             defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
-          }]);
+          }, ...current]);
         } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as { id: string }).id));
       }).subscribe() : null;
     return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
@@ -246,7 +245,6 @@ export default function HomePage() {
     const second = playerRef.current?.getCurrentTime?.();
     if (typeof second === "number" && Number.isFinite(second)) {
       setCurrentSecond(Math.floor(second));
-      setManualSecond(String(Math.floor(second)));
     }
   }, []);
 
@@ -288,6 +286,11 @@ export default function HomePage() {
     .filter((record) => filterZone === "all" || record.zone === filterZone)
     .slice().sort((a, b) => a.video_second - b.video_second), [records, filterEvent, filterZone]);
 
+  const eventFeedRecords = useMemo(() => records.slice().sort((a, b) => {
+    const timeDifference = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return timeDifference || records.indexOf(b) - records.indexOf(a);
+  }), [records]);
+
   async function registerEvent(eventType: EventType, eventZone: Zone) {
     if (!canRecord) return;
     const moment: EventMoment = eventType.is_counter ? "defense" : "attack";
@@ -312,7 +315,7 @@ export default function HomePage() {
         attacking_team: attacking, defending_team: defending, created_by: cloudUserId,
         created_at: data.created_at, youtube_url: videoMoment,
       };
-      setRecords((current) => current.some((entry) => entry.id === saved.id) ? current : [...current, saved]);
+      setRecords((current) => current.some((entry) => entry.id === saved.id) ? current : [saved, ...current]);
       setMessage(t.saveCloud);
     } else {
       const localRecord: MatchEvent = {
@@ -322,7 +325,7 @@ export default function HomePage() {
         attacking_team: attacking, defending_team: defending, created_by: null,
         created_at: new Date().toISOString(), youtube_url: videoMoment,
       };
-      setRecords((current) => [...current, localRecord]);
+      setRecords((current) => [localRecord, ...current]);
       setMessage(t.created + " · " + t.saveLocal);
     }
     setOutcomeText("");
@@ -333,7 +336,6 @@ export default function HomePage() {
       const { data } = await supabase?.auth.getUser() ?? { data: { user: null } };
       if (record.created_by !== data.user?.id) return;
     }
-    if (!window.confirm(t.confirmDelete)) return;
     if (supabase) {
       const { error } = await supabase.from("match_events").delete().eq("id", record.id);
       if (error) { setMessage(error.message); return; }
@@ -371,7 +373,6 @@ export default function HomePage() {
     setVideoId(id);
     setLoadedUrl(videoUrl.trim());
     setCurrentSecond(0);
-    setManualSecond("0");
     setMessage(t.loading);
     setSidebarOpen(false);
   }
@@ -387,7 +388,6 @@ export default function HomePage() {
     setCloudMatchId(match.id);
     setVideoId(id);
     setCurrentSecond(0);
-    setManualSecond("0");
     setRecords([]);
     if (playerRef.current && videoId === id) playerRef.current.seekTo(0, true);
     setMessage(t.matchOpened);
@@ -397,12 +397,6 @@ export default function HomePage() {
   async function signOutFromSidebar() {
     if (supabase) await supabase.auth.signOut();
     setSidebarOpen(false);
-  }
-
-  function seek() {
-    const second = Math.max(0, Number(manualSecond) || 0);
-    playerRef.current?.seekTo?.(second, true);
-    setCurrentSecond(second);
   }
 
   async function createEventType() {
@@ -551,10 +545,6 @@ export default function HomePage() {
             <div className="video-stage relative w-full overflow-hidden bg-black">
               {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[#8798a8]"><Video size={34} strokeWidth={1.2} /><p className="text-sm">{t.videoHelp}</p></div>}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2">
-              <span className="muted text-[11px]">{t.currentTime}</span>
-              <div className="flex items-center gap-2"><input aria-label={t.currentTime} type="number" min="0" className="field !w-20 !px-2 !py-1.5 text-xs font-mono" value={manualSecond} onChange={(e) => setManualSecond(e.target.value)} /><button className="btn !px-2.5 !py-1.5 text-xs" onClick={seek}><Play size={12} />{t.setTime}</button></div>
-            </div>
           </section>
 
           {hasActiveMatch && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
@@ -600,6 +590,23 @@ export default function HomePage() {
               <textarea className="field mt-1 min-h-[38px] resize-none !px-2.5 !py-1.5 text-xs" rows={1} value={outcomeText}
                 onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
             </label>
+            <section className="event-feed overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
+              <div className="flex items-center justify-between border-b border-[#263646] px-2 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Eventos registados" : "Recorded events"}</span>
+                <span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#66e99f]">{records.length}</span>
+              </div>
+              {eventFeedRecords.length === 0 ? <p className="muted px-2 py-3 text-[10px]">{t.empty}</p> : <div className="max-h-[30svh] overflow-y-auto">
+                <table className="event-feed-table w-full table-fixed">
+                  <thead><tr><th className="w-[54px]">{t.time}</th><th>{t.event}</th><th className="w-[70px]">{t.momentColumn}</th><th className="w-[25px]"></th></tr></thead>
+                  <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
+                    <td><a className="font-mono text-[10px] font-semibold text-[#7beaa8] hover:underline" href={record.youtube_url || "#"} target="_blank" rel="noreferrer" title={language === "pt" ? "Abrir este momento no YouTube" : "Open this moment on YouTube"}>{formatTime(record.video_second)}</a></td>
+                    <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>{language === "pt" ? record.event_name_pt : record.event_name_en}</td>
+                    <td className="text-[9px]">{record.moment === "attack" ? t.attackMoment : t.defenseMoment}</td>
+                    <td><button type="button" aria-label={t.delete} title={t.delete} className="event-delete flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
+                  </tr>)}</tbody>
+                </table>
+              </div>}
+            </section>
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
           </section>}
           {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
@@ -610,21 +617,7 @@ export default function HomePage() {
               {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
             </section>
 
-            <section className="panel overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] p-3">
-                <div><h2 className="text-sm font-semibold">{t.timeline}</h2><p className="muted mt-0.5 text-[10px]">{filteredRecords.length} / {records.length} {t.events.toLowerCase()}</p></div>
-                <div className="flex flex-wrap gap-1.5">
-                  <select className="field !w-auto !px-2 !py-1.5 text-[10px]" value={filterEvent} onChange={(e) => setFilterEvent(e.target.value)}><option value="all">{t.filter}</option>{events.map((event) => <option key={event.id} value={event.id}>{language === "pt" ? event.name_pt : event.name_en}</option>)}</select>
-                  <select className="field !w-auto !px-2 !py-1.5 text-[10px]" value={filterZone} onChange={(e) => setFilterZone(e.target.value)}><option value="all">{t.allZones}</option><option value="left">{t.left}</option><option value="center">{t.center}</option><option value="right">{t.right}</option></select>
-                  <button className="btn !px-2 !py-1.5 text-[10px]" onClick={exportCsv}><ArrowDownToLine size={12} />{t.export}</button>
-                </div>
-              </div>
-              <div className="scrollbar overflow-x-auto">
-                {filteredRecords.length === 0 ? <div className="p-8 text-center"><div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-[#172331] text-[#8da0b1]"><Activity size={18} /></div><p className="muted text-xs">{t.empty}</p></div> : <table><thead><tr><th>{t.time}</th><th>{t.event}</th><th>{t.momentColumn}</th><th>{t.zone}</th><th>{t.teams}</th><th>{t.resultColumn}</th><th>{t.action}</th></tr></thead><tbody>
-                  {filteredRecords.map((record) => <tr key={record.id}><td className="font-mono text-[#7beaa8]">{formatTime(record.video_second)}</td><td>{language === "pt" ? record.event_name_pt : record.event_name_en}</td><td>{record.moment === "attack" ? t.attackMoment : t.defenseMoment}</td><td>{t[record.zone]}</td><td>{record.attacking_team ? `${record.attacking_team} → ${record.defending_team}` : "—"}</td><td className="max-w-[220px] truncate" title={record.outcome ?? ""}>{record.outcome || "—"}</td><td><div className="flex items-center gap-1"><a className="btn !px-2 !py-1.5 text-xs" href={record.youtube_url || "#"} target="_blank" rel="noreferrer"><Link2 size={13} />{t.open}</a><button aria-label={t.delete} className="btn !px-2 !py-1.5 text-xs text-red-300" onClick={() => void removeEvent(record)}><Trash2 size={13} /></button></div></td></tr>)}
-                </tbody></table>}
-              </div>
-            </section>
+
           </>}
 
           {canConfigure && <section className="panel grid gap-3 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
