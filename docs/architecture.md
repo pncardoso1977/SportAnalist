@@ -58,3 +58,10 @@ Each match event is stored against one canonical team in `match_events.team_id`:
 The `teams` table is scoped to a project and has a unique normalized name, so the same opponent across multiple matches reuses one team record. This supports later team-level match/event history and statistics.
 
 Apply `supabase/migrations/0003_team_event_association.sql` after migrations `0001` and `0002`. It creates canonical team records, backfills old match events to their relevant team, applies RLS, and adds team-based indexes.
+
+
+## Public match links
+
+A match editor (`admin` or `analyst`) can create or revoke an unlisted public URL for one match. Share tokens are stored in `match_public_shares`, separate from `matches`, with no direct API privileges for `anon` or `authenticated`. The public client calls `get_public_match_analysis(token)`, a security-definer RPC which returns a restricted JSON projection for the matching token only: teams, YouTube URL and event timeline fields. It does not return project identifiers, users, authors, membership data or other matches.
+
+Apply `supabase/migrations/0004_public_match_sharing.sql` after migrations `0001`, `0002` and `0003`. Editors use `create_match_share` and `revoke_match_share`; the read-only public page is `/share/[token]`.
