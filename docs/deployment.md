@@ -24,7 +24,7 @@ Once Git integration is configured, pushes to `main` trigger automatic deploymen
 
 ## 4. Firebase AI Logic (YouTube goal detection)
 
-Follow [ai-goal-detection.md](ai-goal-detection.md) to register a Firebase Web app, enable Firebase AI Logic with the Gemini Developer API, configure App Check with reCAPTCHA v3 and add the four `NEXT_PUBLIC_FIREBASE_*` variables to Vercel. Do not place a Gemini standalone API key, service-account credential or reCAPTCHA secret in the frontend. The AI feature remains disabled until these variables are present.
+Follow [ai-goal-detection.md](ai-goal-detection.md) to register a Firebase Web app, enable Firebase AI Logic with the Gemini Developer API, configure App Check with reCAPTCHA Enterprise and add the four `NEXT_PUBLIC_FIREBASE_*` variables to Vercel. Do not place a Gemini standalone API key, service-account credential or reCAPTCHA secret in the frontend. The AI feature remains disabled until these variables are present.
 
 ## 5. Free-tier constraints
 Free tiers have resource, bandwidth, build and database limits. Availability, suspension/pausing rules, and quotas are controlled by the providers and may change. Check the current provider limits before using this for a competition or production season.
