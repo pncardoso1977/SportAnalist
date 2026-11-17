@@ -29,12 +29,12 @@ const APP_CHECK_SITE_KEY = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
 let appCheckInitialized = false;
 
 export function isFirebaseAIConfigured(): boolean {
-  return Boolean(FIREBASE_API_KEY && FIREBASE_APP_ID && FIREBASE_PROJECT_ID);
+  return Boolean(FIREBASE_API_KEY && FIREBASE_APP_ID && FIREBASE_PROJECT_ID && APP_CHECK_SITE_KEY);
 }
 
 function getGenerativeModel() {
   if (!isFirebaseAIConfigured()) {
-    throw new Error("Firebase AI Logic is not configured. Add the Firebase web app settings to the environment variables.");
+    throw new Error("Firebase AI Logic is not configured. Add the Firebase web app settings and the reCAPTCHA v3 App Check site key to the environment variables.");
   }
   if (typeof window === "undefined") {
     throw new Error("Video analysis can only run in the browser.");
@@ -47,9 +47,9 @@ function getGenerativeModel() {
   };
   const app = getApps().length ? getApp() : initializeApp(config);
 
-  // App Check is optional during initial setup. Configure its site key and enforce
-  // App Check in Firebase before using this feature with a wider audience.
-  if (APP_CHECK_SITE_KEY && !appCheckInitialized) {
+  // Firebase AI Logic should be protected by App Check. The site key is required
+  // by isFirebaseAIConfigured() so the UI cannot submit videos without this setup.
+  if (!appCheckInitialized) {
     try {
       initializeAppCheck(app, {
         provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
