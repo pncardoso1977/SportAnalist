@@ -120,18 +120,13 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
         subtitle: "ANÁLISE TÉCNICO-TÁTICA DE FUTSAL",
         shared: "Análise partilhada",
         video: "Vídeo do jogo",
-        timeline: "Cronologia de eventos",
+        timeline: "Eventos registados",
         empty: "Este jogo ainda não tem eventos registados.",
-        time: "Tempo",
-        event: "Evento",
-        moment: "Momento",
-        zone: "Zona",
-        outcome: "Resultado",
         attack: "Ataque",
         defense: "Defesa",
-        attacks: "Momentos de ataque",
-        defenses: "Momentos de defesa",
-        total: "Total de eventos",
+        attacks: "Ataque",
+        defenses: "Defesa",
+        total: "Total",
         noVideo: "O vídeo não está disponível para incorporação. Podes abri-lo diretamente no YouTube.",
         openVideo: "Abrir vídeo",
         invalid: "Análise indisponível",
@@ -142,18 +137,13 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
         subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS",
         shared: "Shared analysis",
         video: "Match video",
-        timeline: "Event timeline",
+        timeline: "Recorded events",
         empty: "No events have been recorded for this match yet.",
-        time: "Time",
-        event: "Event",
-        moment: "Moment",
-        zone: "Zone",
-        outcome: "Outcome",
         attack: "Attack",
         defense: "Defence",
-        attacks: "Attacking moments",
-        defenses: "Defensive moments",
-        total: "Total events",
+        attacks: "Attack",
+        defenses: "Defence",
+        total: "Total",
         noVideo: "The video cannot be embedded. You can open it directly on YouTube.",
         openVideo: "Open video",
         invalid: "Analysis unavailable",
@@ -162,8 +152,8 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
       };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1180px] flex-col gap-5 px-3 py-5 md:px-6 md:py-8">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#263646] pb-4">
+    <main className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col gap-4 px-3 py-3 md:px-5 md:py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#263646] pb-3">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#35d07f1c] text-[#35d07f]">
             <Activity size={25} />
@@ -173,9 +163,14 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
             <p className="muted text-[9px] font-semibold tracking-[.16em]">{text.subtitle}</p>
           </div>
         </div>
-        <button className="btn !px-3 !py-2 text-xs" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}>
-          {language === "pt" ? "EN" : "PT"}
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="hidden rounded-full border border-[#35d07f40] bg-[#35d07f12] px-3 py-2 text-[10px] text-[#63e99e] sm:inline-flex">
+            {text.shared}
+          </span>
+          <button className="btn !px-3 !py-2 text-xs" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}>
+            {language === "pt" ? "EN" : "PT"}
+          </button>
+        </div>
       </header>
 
       {loading ? (
@@ -190,8 +185,7 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
         <>
           <section className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[.14em] text-[#7beaa8]">{text.shared}</p>
-              <h2 className="text-2xl font-bold tracking-tight">
+              <h2 className="text-lg font-bold tracking-tight">
                 {analysis.match.analyzed_team} <span className="muted font-normal">vs</span> {opponent}
               </h2>
               <p className="muted mt-1 text-xs">
@@ -203,18 +197,18 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
             </a>
           </section>
 
-          <section className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(250px,.8fr)]">
-            <div className="panel min-w-0 overflow-hidden">
+          <section className="analysis-workspace with-event-controls min-w-0">
+            <section className="analysis-video-panel panel min-w-0 overflow-hidden">
               <div className="flex items-center gap-2 border-b border-[#263646] px-3 py-2">
                 <Video size={15} className="text-[#7beaa8]" />
                 <h3 className="text-sm font-semibold">{text.video}</h3>
-                <span className="muted ml-auto font-mono text-xs">{formatTime(selectedSecond)}</span>
+                <span className="muted ml-auto font-mono text-sm text-[#75eca8]">{formatTime(selectedSecond)}</span>
               </div>
               {videoId ? (
-                <div className="aspect-video w-full bg-black">
+                <div className="video-stage relative overflow-hidden bg-black">
                   <iframe
                     key={playerVersion}
-                    className="h-full w-full"
+                    className="absolute inset-0 h-full w-full"
                     src={embedUrl}
                     title={text.video}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -223,78 +217,72 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
                   />
                 </div>
               ) : (
-                <div className="flex aspect-video items-center justify-center p-6 text-center text-sm text-[#9eb0c0]">{text.noVideo}</div>
+                <div className="video-stage flex items-center justify-center p-6 text-center text-sm text-[#9eb0c0]">{text.noVideo}</div>
               )}
-            </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              {[
-                { label: text.total, value: events.length },
-                { label: text.attacks, value: attacks },
-                { label: text.defenses, value: defenses },
-              ].map((stat) => (
-                <div key={stat.label} className="panel flex items-center justify-between p-4">
-                  <span className="muted text-xs">{stat.label}</span>
-                  <strong className="text-2xl tabular-nums">{stat.value}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-[#263646] px-3 py-3">
-              <h3 className="text-sm font-semibold">{text.timeline}</h3>
-              <span className="rounded-full bg-[#35d07f18] px-2 py-1 text-[10px] text-[#66e99f]">{events.length}</span>
-            </div>
-            {events.length === 0 ? (
-              <p className="muted px-4 py-6 text-sm">{text.empty}</p>
-            ) : (
-              <div className="scrollbar overflow-x-auto">
-                <table className="min-w-[650px] w-full">
-                  <thead>
-                    <tr>
-                      <th className="w-[76px]">{text.time}</th>
-                      <th>{text.event}</th>
-                      <th className="w-[130px]">{text.moment}</th>
-                      <th className="w-[105px]">{text.zone}</th>
-                      <th>{text.outcome}</th>
-                      <th className="w-[52px]"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map((event) => (
-                      <tr key={event.id}>
-                        <td>
-                          <button type="button" onClick={() => seekToEvent(event)} className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-[#7beaa8] hover:underline">
-                            <Play size={11} />{formatTime(event.video_second)}
-                          </button>
-                        </td>
-                        <td className="text-sm font-medium">{eventName(event, language)}</td>
-                        <td className="text-xs">{event.moment === "attack" ? text.attack : text.defense}</td>
-                        <td className="text-xs">{ZONE_LABELS[event.zone][language]}</td>
-                        <td className="max-w-[280px] whitespace-normal text-xs text-[#c3ced8]">{event.outcome || "—"}</td>
-                        <td>
-                          <a
-                            href={event.youtube_url || `https://www.youtube.com/watch?v=${videoId}&t=${event.video_second}s`}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={text.openVideo}
-                            className="inline-flex text-[#8fc8ff] hover:text-white"
-                          >
-                            <ExternalLink size={14} />
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <section className="public-event-panel panel flex min-w-0 flex-col overflow-hidden">
+              <div className="flex items-center justify-between gap-2 border-b border-[#263646] px-2.5 py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{text.timeline}</h3>
+                <span className="rounded-full bg-[#35d07f18] px-2 py-1 text-[10px] text-[#66e99f]">{events.length}</span>
               </div>
-            )}
+              <div className="grid grid-cols-3 gap-1 border-b border-[#263646] px-2 py-2">
+                {[
+                  { label: text.total, value: events.length },
+                  { label: text.attacks, value: attacks },
+                  { label: text.defenses, value: defenses },
+                ].map((stat) => (
+                  <div key={stat.label} className="min-w-0 text-center">
+                    <p className="muted truncate text-[9px]">{stat.label}</p>
+                    <p className="mt-0.5 text-base font-bold tabular-nums">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+              {events.length === 0 ? (
+                <p className="muted px-3 py-5 text-xs">{text.empty}</p>
+              ) : (
+                <div className="public-event-scroll scrollbar min-h-0 overflow-y-auto">
+                  {events.map((event) => (
+                    <article key={event.id} className="border-b border-[#263646] px-2.5 py-2 last:border-b-0 hover:bg-white/[0.025]">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => seekToEvent(event)}
+                          className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-[#7beaa8] hover:underline"
+                          title={language === "pt" ? "Reproduzir este momento" : "Play this moment"}
+                        >
+                          <Play size={10} />{formatTime(event.video_second)}
+                        </button>
+                        <a
+                          href={event.youtube_url || `https://www.youtube.com/watch?v=${videoId}&t=${event.video_second}s`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={text.openVideo}
+                          className="inline-flex text-[#8fc8ff] hover:text-white"
+                        >
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                      <p className="mt-1 break-words text-xs font-semibold">{eventName(event, language)}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[9px]">
+                        <span className={event.moment === "attack"
+                          ? "rounded border border-[#315b47] bg-[#112820] px-1.5 py-0.5 text-[#79e9aa]"
+                          : "rounded border border-[#694a40] bg-[#321f19] px-1.5 py-0.5 text-[#f0b08d]"}>
+                          {event.moment === "attack" ? text.attack : text.defense}
+                        </span>
+                        <span className="muted">{ZONE_LABELS[event.zone][language]}</span>
+                      </div>
+                      {event.outcome && <p className="mt-1 whitespace-pre-wrap break-words text-[10px] text-[#b7c5d1]">{event.outcome}</p>}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </section>
         </>
       )}
 
-      <footer className="muted mt-auto border-t border-[#263646] pt-4 text-center text-[10px]">{text.footer}</footer>
+      <footer className="muted mt-auto border-t border-[#263646] pt-3 text-center text-[10px]">{text.footer}</footer>
     </main>
   );
 }
