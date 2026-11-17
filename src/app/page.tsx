@@ -867,7 +867,62 @@ export default function HomePage() {
                 </table>
               </div>}
             </section>
-            <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+            
+            {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
+          </section>}
+          {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
+          </div>
+
+          {hasActiveMatch && <>
+            <section className="grid gap-2 sm:grid-cols-3">
+              {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
+            </section>
+
+
+          </>}
+
+          {canManagePublicShare && <section className="panel grid gap-3 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">{language === "pt" ? "Link público deste jogo" : "Public link for this match"}</h2>
+                <p className="muted mt-1 text-[10px]">
+                  {language === "pt"
+                    ? "Qualquer pessoa com este endereço pode consultar o vídeo e a cronologia. Não dá acesso à edição nem a outros jogos."
+                    : "Anyone with this address can view the video and timeline. It does not grant editing access or access to other matches."}
+                </p>
+              </div>
+              <Share2 size={18} className="text-[#62e69b]" />
+            </div>
+            {publicShareToken ? (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+                <input className="field min-w-0 flex-1 !py-2 text-xs" readOnly aria-label={language === "pt" ? "Link público" : "Public link"} value={publicShareUrl} />
+                <button type="button" className="btn !py-2 text-xs" disabled={shareBusy} onClick={() => void copyPublicShareLink()}>
+                  <Copy size={13} />{language === "pt" ? "Copiar link" : "Copy link"}
+                </button>
+                <button type="button" className="btn !py-2 text-xs text-[#ffadad]" disabled={shareBusy} onClick={() => void revokePublicShare()}>
+                  {language === "pt" ? "Desativar link" : "Disable link"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={shareBusy} onClick={() => void createPublicShare()}>
+                  <Share2 size={13} />{shareBusy
+                    ? (language === "pt" ? "A preparar…" : "Preparing…")
+                    : (language === "pt" ? "Criar link público" : "Create public link")}
+                </button>
+                <span className="muted text-[10px]">{language === "pt" ? "O link pode ser desativado a qualquer momento." : "The link can be disabled at any time."}</span>
+              </div>
+            )}
+          </section>}
+
+          {canConfigure && <section className="panel grid gap-3 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <div className="md:col-span-3 flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">{t.configure}</h2><p className="muted mt-0.5 text-[10px]">{t.configHint}</p></div><ShieldCheck className="text-[#62e69b]" size={20} /></div>
+            <label className="text-[11px] text-[#9eb0c0]">{t.newEvent}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNamePt} onChange={(e) => setNewNamePt(e.target.value)} placeholder="Ex.: Remate" /></label>
+            <label className="text-[11px] text-[#9eb0c0]">{t.newEventEn}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
+            <button className="btn btn-primary h-[38px] text-xs" onClick={() => void createEventType()}><FilePlus2 size={13} />{t.create}</button>
+          </section>}
+
+          {hasActiveMatch && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
                 <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
@@ -933,60 +988,7 @@ export default function HomePage() {
                   </article>
                 ))}
               </div>}
-            </section>
-            {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
-          </section>}
-          {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
-          </div>
-
-          {hasActiveMatch && <>
-            <section className="grid gap-2 sm:grid-cols-3">
-              {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
-            </section>
-
-
-          </>}
-
-          {canManagePublicShare && <section className="panel grid gap-3 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">{language === "pt" ? "Link público deste jogo" : "Public link for this match"}</h2>
-                <p className="muted mt-1 text-[10px]">
-                  {language === "pt"
-                    ? "Qualquer pessoa com este endereço pode consultar o vídeo e a cronologia. Não dá acesso à edição nem a outros jogos."
-                    : "Anyone with this address can view the video and timeline. It does not grant editing access or access to other matches."}
-                </p>
-              </div>
-              <Share2 size={18} className="text-[#62e69b]" />
-            </div>
-            {publicShareToken ? (
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-                <input className="field min-w-0 flex-1 !py-2 text-xs" readOnly aria-label={language === "pt" ? "Link público" : "Public link"} value={publicShareUrl} />
-                <button type="button" className="btn !py-2 text-xs" disabled={shareBusy} onClick={() => void copyPublicShareLink()}>
-                  <Copy size={13} />{language === "pt" ? "Copiar link" : "Copy link"}
-                </button>
-                <button type="button" className="btn !py-2 text-xs text-[#ffadad]" disabled={shareBusy} onClick={() => void revokePublicShare()}>
-                  {language === "pt" ? "Desativar link" : "Disable link"}
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={shareBusy} onClick={() => void createPublicShare()}>
-                  <Share2 size={13} />{shareBusy
-                    ? (language === "pt" ? "A preparar…" : "Preparing…")
-                    : (language === "pt" ? "Criar link público" : "Create public link")}
-                </button>
-                <span className="muted text-[10px]">{language === "pt" ? "O link pode ser desativado a qualquer momento." : "The link can be disabled at any time."}</span>
-              </div>
-            )}
-          </section>}
-
-          {canConfigure && <section className="panel grid gap-3 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-            <div className="md:col-span-3 flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">{t.configure}</h2><p className="muted mt-0.5 text-[10px]">{t.configHint}</p></div><ShieldCheck className="text-[#62e69b]" size={20} /></div>
-            <label className="text-[11px] text-[#9eb0c0]">{t.newEvent}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNamePt} onChange={(e) => setNewNamePt(e.target.value)} placeholder="Ex.: Remate" /></label>
-            <label className="text-[11px] text-[#9eb0c0]">{t.newEventEn}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
-            <button className="btn btn-primary h-[38px] text-xs" onClick={() => void createEventType()}><FilePlus2 size={13} />{t.create}</button>
-          </section>}
+            </section>}
 
           <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#263646] pt-3">
             <div className="flex items-center gap-2 text-[10px] text-[#8fa1b3]"><CircleHelp size={13} />{t.setupHint}</div>
