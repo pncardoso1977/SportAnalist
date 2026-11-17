@@ -58,7 +58,7 @@ const COPY = {
     eventRequired: "Preenche os nomes do evento.", saveError: "Não foi possível guardar no servidor. O registo foi mantido localmente.",
     members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
     aiTitle: "Deteção de golos com IA", aiHint: "Analisa diretamente o URL do YouTube (também funciona com vídeos não listados). A IA sugere momentos; confirma cada golo antes de o guardar.",
-    aiRun: "Procurar golos com IA", aiRunning: "A analisar vídeo…", aiNotConfigured: "Firebase AI Logic não está configurado. Adiciona as credenciais Firebase e a chave reCAPTCHA App Check às variáveis de ambiente.",
+    aiRun: "Procurar golos com IA", aiRunning: "A analisar vídeo…", aiNotConfigured: "Firebase AI Logic não está configurado. Adiciona as credenciais Firebase e a chave reCAPTCHA Enterprise do App Check às variáveis de ambiente.",
     aiConsent: "Autorizo o envio do vídeo e do respetivo áudio/imagem para análise pelo Google Gemini. No nível gratuito, os conteúdos podem ser utilizados pela Google para melhorar os seus produtos.",
     aiConsentRequired: "É necessário confirmar a autorização de análise antes de enviar o vídeo.",
     aiAnalyzedKit: "Equipamento da equipa analisada", aiOpponentKit: "Equipamento do adversário",
