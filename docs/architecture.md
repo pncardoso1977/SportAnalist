@@ -3,9 +3,10 @@
 ## Data model
 - `projects`: one analysed team per project.
 - `project_members`: user-to-project membership and role.
+- `teams`: canonical team records, unique by project and normalized team name.
 - `matches`: opponent, analysed team and YouTube source.
 - `event_types`: project-configurable bilingual event catalogue.
-- `match_events`: timestamp, event type, court zone, attacking/defending team, author and direct YouTube timestamp URL.
+- `match_events`: timestamp, event type, court zone, phase, associated `team_id`, attacking/defending teams, author and direct YouTube timestamp URL.
 - `profiles`: user display name and preferred language.
 
 ## Roles
@@ -47,3 +48,13 @@ Default combination rules:
 - For defensive/counter events, the opponent is stored as attacking team and the analysed team as defending team.
 
 Apply migration `supabase/migrations/0002_event_moment_and_outcome.sql` after the initial schema migration. It adds the `event_moment` enum and `outcome` column, backfills existing events, and seeds the three additional event types.
+
+
+## Team history association
+Each match event is stored against one canonical team in `match_events.team_id`:
+- `moment = attack`: the associated team is the project's analysed team.
+- `moment = defense`: the associated team is the match opponent.
+- `attacking_team` and `defending_team` retain both sides for tactical context.
+The `teams` table is scoped to a project and has a unique normalized name, so the same opponent across multiple matches reuses one team record. This supports later team-level match/event history and statistics.
+
+Apply `supabase/migrations/0003_team_event_association.sql` after migrations `0001` and `0002`. It creates canonical team records, backfills old match events to their relevant team, applies RLS, and adds team-based indexes.
