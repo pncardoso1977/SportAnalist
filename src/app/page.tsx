@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDownToLine, CircleHelp, Clock3, FilePlus2,
-  Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, ShieldCheck, Trash2, Video, X,
+  Activity, ArrowDownToLine, CircleHelp, Clock3, Copy, FilePlus2,
+  Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Trash2, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
@@ -148,6 +148,10 @@ export default function HomePage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [cloudUserId, setCloudUserId] = useState<string | null>(null);
   const [cloudMatchId, setCloudMatchId] = useState<string | null>(null);
+  const [publicShareToken, setPublicShareToken] = useState<string | null>(null);
+  const [publicShareUrl, setPublicShareUrl] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const shareRequestRef = useRef(0);
   const [matches, setMatches] = useState<Match[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const playerRef = useRef<YouTubePlayer | null>(null);
@@ -160,12 +164,15 @@ export default function HomePage() {
   const hasActiveMatch = Boolean(loadedUrl && (!supabase || cloudMatchId));
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
   const canRecord = hasActiveMatch && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
+  const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst"));
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
     if (teamName) setTeam(teamName);
   }, []);
   const handleSignOut = useCallback(() => {
+    shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
+    setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
   }, []);
   const activeEvents = events.filter((event) => event.active);
   const eventRows = activeEvents.filter((event) => !event.is_counter);
@@ -407,8 +414,13 @@ export default function HomePage() {
       setMatches((current) => [savedMatch!, ...current.filter((match) => match.id !== savedMatch!.id)]);
       setCloudMatchId(savedMatch.id);
       setRecords([]);
+      void loadShareForMatch(savedMatch.id);
     } else {
+      shareRequestRef.current += 1;
       setCloudMatchId(null);
+      setPublicShareToken(null);
+      setPublicShareUrl("");
+      setShareBusy(false);
       setRecords([]);
     }
     setVideoId(id);
@@ -427,6 +439,7 @@ export default function HomePage() {
     setVideoUrl(match.youtube_url);
     setLoadedUrl(match.youtube_url);
     setCloudMatchId(match.id);
+    void loadShareForMatch(match.id);
     setVideoId(id);
     setCurrentSecond(0);
     setRecords([]);
@@ -678,6 +691,40 @@ export default function HomePage() {
 
 
           </>}
+
+          {canManagePublicShare && <section className="panel grid gap-3 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">{language === "pt" ? "Link público deste jogo" : "Public link for this match"}</h2>
+                <p className="muted mt-1 text-[10px]">
+                  {language === "pt"
+                    ? "Qualquer pessoa com este endereço pode consultar o vídeo e a cronologia. Não dá acesso à edição nem a outros jogos."
+                    : "Anyone with this address can view the video and timeline. It does not grant editing access or access to other matches."}
+                </p>
+              </div>
+              <Share2 size={18} className="text-[#62e69b]" />
+            </div>
+            {publicShareToken ? (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+                <input className="field min-w-0 flex-1 !py-2 text-xs" readOnly aria-label={language === "pt" ? "Link público" : "Public link"} value={publicShareUrl} />
+                <button type="button" className="btn !py-2 text-xs" disabled={shareBusy} onClick={() => void copyPublicShareLink()}>
+                  <Copy size={13} />{language === "pt" ? "Copiar link" : "Copy link"}
+                </button>
+                <button type="button" className="btn !py-2 text-xs text-[#ffadad]" disabled={shareBusy} onClick={() => void revokePublicShare()}>
+                  {language === "pt" ? "Desativar link" : "Disable link"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={shareBusy} onClick={() => void createPublicShare()}>
+                  <Share2 size={13} />{shareBusy
+                    ? (language === "pt" ? "A preparar…" : "Preparing…")
+                    : (language === "pt" ? "Criar link público" : "Create public link")}
+                </button>
+                <span className="muted text-[10px]">{language === "pt" ? "O link pode ser desativado a qualquer momento." : "The link can be disabled at any time."}</span>
+              </div>
+            )}
+          </section>}
 
           {canConfigure && <section className="panel grid gap-3 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
             <div className="md:col-span-3 flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">{t.configure}</h2><p className="muted mt-0.5 text-[10px]">{t.configHint}</p></div><ShieldCheck className="text-[#62e69b]" size={20} /></div>
