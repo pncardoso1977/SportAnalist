@@ -61,10 +61,34 @@ tbody tr:hover { background: #ffffff06; }
   min-width: 0;
 }
 .video-stage {
-  width: 100%;
+  width: min(100%, calc(min(52svh, 440px) * 1.77778));
   height: auto;
+  max-height: min(52svh, 440px);
   aspect-ratio: 16 / 9;
   background: #000;
+  margin-left: 0;
+}
+.event-feed-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.event-feed-table th {
+  font-size: 8px;
+  letter-spacing: .04em;
+  padding: 5px 4px;
+  white-space: nowrap;
+}
+.event-feed-table td {
+  padding: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.event-delete {
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 .video-stage > #sportanalist-player {
   width: 100%;
