@@ -33,7 +33,7 @@ type DbMatchEventRow = {
 
 const COPY = {
   pt: {
-    subtitle: "ANÁLISE TÉCNICO-TÁTICA DE FUTSAL", match: "Jogo em análise", analyzed: "Equipa analisada", sideMenu: "Menu de jogos", newMatch: "Novo jogo", savedMatches: "Jogos guardados", currentMatch: "Jogo ativo",
+    subtitle: "ANÁLISE TÉCNICO-TÁTICA DE FUTSAL", match: "Jogo em análise", analyzed: "Equipa analisada", sideMenu: "Menu", closeMenu: "Fechar menu", newMatch: "Novo jogo", savedMatches: "Jogos guardados", currentMatch: "Jogo ativo", mobileViewOnly: "No telemóvel, os eventos são apenas para consulta. Usa um tablet ou computador para registar eventos.",
     opponent: "Adversário", youtube: "Link do vídeo YouTube", load: "Carregar vídeo", video: "Vídeo do jogo",
     videoHelp: "Insere um link YouTube para associar o vídeo à análise.", videoUnavailable: "Vídeo não carregado ou incorporação indisponível.",
     currentTime: "Tempo atual", setTime: "Ir para segundo", capture: "Atalhos de registo", outcome: "Resultado / observação (opcional)", outcomePlaceholder: "Ex.: remate defendido, golo, bola recuperada…", attackMoment: "Momento de ataque", defenseMoment: "Momento de defesa", momentColumn: "Momento", resultColumn: "Resultado", autoRegisterHint: "Cada atalho regista automaticamente o evento, o momento, a zona e o segundo atual do vídeo.", savedEvent: "Evento registado", events: "Eventos", zone: "Zona do campo", left: "Esquerda",
@@ -57,7 +57,7 @@ const COPY = {
     members: "Gerir utilizadores", memberEmail: "Email do utilizador", memberRole: "Perfil", addMember: "Adicionar utilizador", memberHint: "O utilizador tem de criar conta primeiro. A função é aplicada no projeto e validada pela base de dados.", memberAdded: "Utilizador adicionado ao projeto.",
   },
   en: {
-    subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed", sideMenu: "Match menu", newMatch: "New match", savedMatches: "Saved matches", currentMatch: "Active match",
+    subtitle: "FUTSAL TECHNICAL & TACTICAL ANALYSIS", match: "Match analysis", analyzed: "Team analysed", sideMenu: "Menu", closeMenu: "Close menu", newMatch: "New match", savedMatches: "Saved matches", currentMatch: "Active match", mobileViewOnly: "On a phone, events are read-only. Use a tablet or computer to record events.",
     opponent: "Opponent", youtube: "YouTube video URL", load: "Load video", video: "Match video",
     videoHelp: "Paste a YouTube link to associate the video with this analysis.", videoUnavailable: "Video not loaded or embedding unavailable.",
     currentTime: "Current time", setTime: "Seek to second", capture: "Quick event capture", outcome: "Outcome / note (optional)", outcomePlaceholder: "e.g. shot saved, goal, possession won…", attackMoment: "Attacking phase", defenseMoment: "Defensive phase", momentColumn: "Moment", resultColumn: "Outcome", autoRegisterHint: "Each shortcut immediately records the event, phase, zone and current video second.", savedEvent: "Event recorded", events: "Events", zone: "Court zone", left: "Left",
@@ -451,7 +451,7 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col gap-4 px-3 py-3 md:px-5 md:py-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <button className="btn !h-10 !w-10 !p-0 lg:hidden" aria-label={t.sideMenu} onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
+          <button className="btn !h-10 !w-10 !p-0" aria-label={sidebarOpen ? t.closeMenu : t.sideMenu} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <X size={19} /> : <Menu size={19} />}</button>
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#35d07f1c] text-[#35d07f]"><Activity size={25} /></div>
           <div><h1 className="text-xl font-bold tracking-tight">SportAnalist</h1><p className="muted text-[9px] font-semibold tracking-[.16em]">{t.subtitle}</p></div>
         </div>
@@ -466,9 +466,9 @@ export default function HomePage() {
         </div>
       </header>
 
-      {sidebarOpen && <button aria-label="Fechar menu" className="fixed inset-0 z-40 bg-black/65 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <button aria-label={t.closeMenu} className="fixed inset-0 z-40 bg-black/65" onClick={() => setSidebarOpen(false)} />}
       <div className="flex min-h-0 flex-1 items-start gap-4">
-        <aside className={`${sidebarOpen ? "fixed inset-y-0 left-0 z-50 block w-[min(88vw,340px)]" : "hidden"} panel scrollbar flex-col gap-3 overflow-y-auto p-3 lg:sticky lg:top-3 lg:flex lg:h-[calc(100vh-1.5rem)] lg:w-[292px] lg:shrink-0`}>
+        <aside aria-hidden={!sidebarOpen} className={`panel scrollbar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(88vw,320px)] flex-col gap-3 overflow-y-auto rounded-none p-3 shadow-2xl transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"}`}>
           <div className="flex items-center justify-between border-b border-[#263646] pb-2">
             <div><h2 className="text-sm font-semibold">{t.sideMenu}</h2><p className="muted mt-0.5 text-[10px]">{projectId ? team : t.matchHistory}</p></div>
             <button className="btn !h-8 !w-8 !p-0 lg:hidden" aria-label="Fechar menu" onClick={() => setSidebarOpen(false)}><X size={15} /></button>
@@ -547,7 +547,7 @@ export default function HomePage() {
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
               <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-1.5 inline" size={13} />{formatTime(currentSecond)}</span>
             </div>
-            <div className="relative aspect-video w-full bg-black">
+            <div className="video-stage relative w-full overflow-hidden bg-black">
               {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[#8798a8]"><Video size={34} strokeWidth={1.2} /><p className="text-sm">{t.videoHelp}</p></div>}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 p-2">
@@ -556,19 +556,8 @@ export default function HomePage() {
             </div>
           </section>
 
-          {hasActiveMatch && <section className="panel flex flex-col gap-3 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><h2 className="text-sm font-semibold">{t.capture}</h2><p className="muted mt-0.5 text-[10px]">{t.events} · {records.length}</p></div>
-              <span className="rounded-full bg-[#35d07f18] px-2 py-0.5 text-[10px] text-[#66e99f]">{formatTime(currentSecond)}</span>
-            </div>
-
-            <label className="block text-[11px] font-semibold text-[#a8b8c7]">
-              {t.outcome}
-              <textarea className="field mt-1 min-h-[46px] resize-y !px-2.5 !py-2 text-xs" rows={1} value={outcomeText}
-                onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
-            </label>
-
-            <div className="grid gap-3 xl:grid-cols-2">
+          {hasActiveMatch && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
+            <div className="event-matrix grid gap-2 xl:grid-cols-2">
               {(["attack", "defense"] as EventMoment[]).map((moment) => {
                 const momentEvents = activeEvents.filter((event) => event.is_counter === (moment === "defense"));
                 const momentIsAttack = moment === "attack";
@@ -581,7 +570,7 @@ export default function HomePage() {
                     <h3 className={`text-xs font-semibold ${momentColor.heading}`}>{heading}</h3>
                     <span className="text-[10px] muted">{momentEvents.length} {t.events.toLowerCase()}</span>
                   </div>
-                  <div className="grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-1">
+                  <div className="event-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5">
                     <div />
                     {(["left", "center", "right"] as Zone[]).map((eventZone) => <div key={eventZone} className="truncate px-0.5 pb-1 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{ZONE_LABELS[eventZone][language]}</div>)}
                     {momentEvents.map((event) => {
@@ -604,8 +593,15 @@ export default function HomePage() {
                 </section>;
               })}
             </div>
+
+            <label className="block text-[10px] font-semibold text-[#a8b8c7]">
+              {t.outcome}
+              <textarea className="field mt-1 min-h-[38px] resize-none !px-2.5 !py-1.5 text-xs" rows={1} value={outcomeText}
+                onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
+            </label>
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
           </section>}
+          {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
 
           {hasActiveMatch && <>
             <section className="grid gap-2 sm:grid-cols-3">
