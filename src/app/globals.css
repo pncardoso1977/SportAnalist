@@ -171,5 +171,7 @@ tbody tr:hover { background: #ffffff06; }
 .event-feed-table td.event-moment-cell {
   width: 56px;
   font-size: 9px;
+  text-align: left !important;
+  padding-left: 6px;
   white-space: nowrap;
 }
