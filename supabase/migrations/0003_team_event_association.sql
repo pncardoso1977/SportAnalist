@@ -44,28 +44,22 @@ alter table public.match_events
 -- Backfill event ownership: attack -> analysed team; defence -> opponent.
 update public.match_events me
 set team_id = t.id,
-    attacking_team = coalesce(
-      me.attacking_team,
-      case when me.moment = 'attack'::public.event_moment
-        then m.analyzed_team
-        else case
-          when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
-          when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
-          else m.away_team
-        end
+    attacking_team = case when me.moment = 'attack'::public.event_moment
+      then m.analyzed_team
+      else case
+        when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
+        when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
+        else m.away_team
       end
-    ),
-    defending_team = coalesce(
-      me.defending_team,
-      case when me.moment = 'attack'::public.event_moment
-        then case
-          when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
-          when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
-          else m.away_team
-        end
-        else m.analyzed_team
+    end,
+    defending_team = case when me.moment = 'attack'::public.event_moment
+      then case
+        when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
+        when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
+        else m.away_team
       end
-    )
+      else m.analyzed_team
+    end
 from public.matches m, public.teams t
 where me.match_id = m.id
   and t.project_id = m.project_id
@@ -114,6 +108,7 @@ declare
   associated_project_id uuid;
   associated_team_name text;
   expected_team_name text;
+  expected_opponent_name text;
 begin
   select project_id, analyzed_team, home_team, away_team
     into match_project_id, match_analysed_team, match_home_team, match_away_team
@@ -124,14 +119,22 @@ begin
     raise exception 'Match not found for event team association';
   end if;
 
+  expected_opponent_name := case
+    when lower(btrim(match_home_team)) = lower(btrim(match_analysed_team)) then match_away_team
+    when lower(btrim(match_away_team)) = lower(btrim(match_analysed_team)) then match_home_team
+    else match_away_team
+  end;
+
   if new.moment = 'attack'::public.event_moment then
     expected_team_name := match_analysed_team;
+    if lower(btrim(coalesce(new.defending_team, ''))) <> lower(btrim(expected_opponent_name)) then
+      raise exception 'Attack events must list the opponent as the defending team';
+    end if;
   else
-    expected_team_name := case
-      when lower(btrim(match_home_team)) = lower(btrim(match_analysed_team)) then match_away_team
-      when lower(btrim(match_away_team)) = lower(btrim(match_analysed_team)) then match_home_team
-      else match_away_team
-    end;
+    expected_team_name := expected_opponent_name;
+    if lower(btrim(coalesce(new.defending_team, ''))) <> lower(btrim(match_analysed_team)) then
+      raise exception 'Defence events must list the analysed team as the defending team';
+    end if;
   end if;
 
   select project_id, normalized_name
