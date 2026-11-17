@@ -1,6 +1,6 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 import { getApp, getApps, initializeApp, type FirebaseOptions } from "firebase/app";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import type { Zone } from "@/lib/types";
 
 export type DetectedGoal = {
@@ -34,13 +34,13 @@ export function isFirebaseAIConfigured(): boolean {
 
 function createGenerativeModel() {
   if (!isFirebaseAIConfigured()) {
-    throw new Error("Firebase AI Logic is not configured. Add the Firebase web app settings and the reCAPTCHA v3 App Check site key to the environment variables.");
+    throw new Error("Firebase AI Logic is not configured. Add the Firebase web app settings and the reCAPTCHA Enterprise App Check site key to the environment variables.");
   }
   if (typeof window === "undefined") {
     throw new Error("Video analysis can only run in the browser.");
   }
   if (!APP_CHECK_SITE_KEY) {
-    throw new Error("A reCAPTCHA v3 App Check site key is required.");
+    throw new Error("A reCAPTCHA Enterprise App Check site key is required.");
   }
 
   const config: FirebaseOptions = {
@@ -55,7 +55,7 @@ function createGenerativeModel() {
   if (!appCheckInitialized) {
     try {
       initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
+        provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
         isTokenAutoRefreshEnabled: true,
       });
     } catch (error) {
