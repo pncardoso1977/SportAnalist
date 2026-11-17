@@ -448,6 +448,72 @@ export default function HomePage() {
     setSidebarOpen(false);
   }
 
+  async function loadShareForMatch(matchId: string) {
+    const requestId = ++shareRequestRef.current;
+    setPublicShareToken(null);
+    setPublicShareUrl("");
+    if (!supabase || (role !== "admin" && role !== "analyst")) {
+      setShareBusy(false);
+      return;
+    }
+    setShareBusy(true);
+    const { data, error } = await supabase.rpc("get_match_share_token", { target_match: matchId });
+    if (requestId !== shareRequestRef.current) return;
+    if (error) {
+      setMessage(error.message);
+      setShareBusy(false);
+      return;
+    }
+    const token = typeof data === "string" ? data : null;
+    setPublicShareToken(token);
+    setPublicShareUrl(token ? `${window.location.origin}/share/${token}` : "");
+    setShareBusy(false);
+  }
+
+  async function createPublicShare() {
+    if (!supabase || !cloudMatchId || !canManagePublicShare) return;
+    const requestId = ++shareRequestRef.current;
+    setShareBusy(true);
+    const { data, error } = await supabase.rpc("create_match_share", { target_match: cloudMatchId });
+    if (requestId !== shareRequestRef.current) return;
+    if (error || typeof data !== "string") {
+      setMessage(error?.message ?? (language === "pt" ? "Não foi possível criar o link público." : "Could not create the public link."));
+      setShareBusy(false);
+      return;
+    }
+    setPublicShareToken(data);
+    setPublicShareUrl(`${window.location.origin}/share/${data}`);
+    setShareBusy(false);
+    setMessage(language === "pt" ? "Link público criado para este jogo." : "Public link created for this match.");
+  }
+
+  async function revokePublicShare() {
+    if (!supabase || !cloudMatchId || !canManagePublicShare) return;
+    const requestId = ++shareRequestRef.current;
+    setShareBusy(true);
+    const { error } = await supabase.rpc("revoke_match_share", { target_match: cloudMatchId });
+    if (requestId !== shareRequestRef.current) return;
+    if (error) {
+      setMessage(error.message);
+      setShareBusy(false);
+      return;
+    }
+    setPublicShareToken(null);
+    setPublicShareUrl("");
+    setShareBusy(false);
+    setMessage(language === "pt" ? "A partilha pública foi desativada." : "Public sharing has been disabled.");
+  }
+
+  async function copyPublicShareLink() {
+    if (!publicShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicShareUrl);
+      setMessage(language === "pt" ? "Link copiado." : "Link copied.");
+    } catch {
+      setMessage(language === "pt" ? "Copia o endereço apresentado no campo do link." : "Copy the address shown in the link field.");
+    }
+  }
+
   async function signOutFromSidebar() {
     if (supabase) await supabase.auth.signOut();
     setSidebarOpen(false);
