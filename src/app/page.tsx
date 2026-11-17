@@ -601,7 +601,7 @@ export default function HomePage() {
                   <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
                     <td><a className="font-mono text-[10px] font-semibold text-[#7beaa8] hover:underline" href={record.youtube_url || "#"} target="_blank" rel="noreferrer" title={language === "pt" ? "Abrir este momento no YouTube" : "Open this moment on YouTube"}>{formatTime(record.video_second)}</a></td>
                     <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>{language === "pt" ? record.event_name_pt : record.event_name_en}</td>
-                    <td className="text-[9px]">{record.moment === "attack" ? t.attackMoment : t.defenseMoment}</td>
+                    <td className="text-[9px]" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
                     <td><button type="button" aria-label={t.delete} title={t.delete} className="event-delete flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
                   </tr>)}</tbody>
                 </table>
