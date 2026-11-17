@@ -2,8 +2,8 @@
 
 ## 1. Supabase
 1. Create a Supabase project on the free plan.
-2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql`.
-3. In Authentication settings, configure the allowed site URL and email confirmation policy.
+2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql` and `0004_public_match_sharing.sql`.
+4. In Authentication settings, configure the allowed site URL and email confirmation policy.
 4. Copy the Project URL and publishable key. Do not expose a service-role key in browser code.
 
 ## 2. Vercel
@@ -23,6 +23,12 @@ Once Git integration is configured, pushes to `main` trigger automatic deploymen
 
 ## 4. Free-tier constraints
 Free tiers have resource, bandwidth, build and database limits. Availability, suspension/pausing rules, and quotas are controlled by the providers and may change. Check the current provider limits before using this for a competition or production season.
+
+## Public match sharing
+
+Editors with the `admin` or `analyst` role can create a separate public link for an active match. The link opens `/share/<token>` and exposes only that match's teams, YouTube source and event timeline. It does not provide edit access or project-wide access. The editor can revoke the link at any time; revocation deletes the token and immediately makes the URL unusable.
+
+Migration `0004_public_match_sharing.sql` creates a private token table and narrowly scoped RPC functions. Do not add anonymous SELECT policies to `matches`, `match_events` or `match_public_shares`; the public page reads through the sanitized `get_public_match_analysis` function only.
 
 ## 5. Operational safety
 - Enable database backups/export before a competition.
