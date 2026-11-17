@@ -99,7 +99,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   match_project_id uuid;
   match_analysed_team text;
@@ -153,7 +153,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists validate_match_event_team_association on public.match_events;
 create trigger validate_match_event_team_association
