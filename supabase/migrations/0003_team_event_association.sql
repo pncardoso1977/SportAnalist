@@ -66,20 +66,19 @@ set team_id = t.id,
         else m.analyzed_team
       end
     )
-from public.matches m
-join public.teams t
-  on t.project_id = m.project_id
- and t.normalized_name = lower(btrim(
-   case when me.moment = 'attack'::public.event_moment
-     then m.analyzed_team
-     else case
-       when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
-       when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
-       else m.away_team
-     end
-   end
- ))
+from public.matches m, public.teams t
 where me.match_id = m.id
+  and t.project_id = m.project_id
+  and t.normalized_name = lower(btrim(
+    case when me.moment = 'attack'::public.event_moment
+      then m.analyzed_team
+      else case
+        when lower(btrim(m.home_team)) = lower(btrim(m.analyzed_team)) then m.away_team
+        when lower(btrim(m.away_team)) = lower(btrim(m.analyzed_team)) then m.home_team
+        else m.away_team
+      end
+    end
+  ))
   and me.team_id is null;
 
 -- Any event that could not be matched to a team name is a migration error; stop instead of
