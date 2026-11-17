@@ -8,10 +8,11 @@
 
 ## 2. Vercel
 1. Import `pncardoso1977/SportAnalist` into Vercel using the GitHub integration.
-2. Keep the framework preset as Next.js.
+2. Keep the framework preset as Next.js and set **Node.js Version** to `24.x` (the repository also pins this in `package.json` and `.nvmrc`).
 3. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to Production, Preview and Development environments.
-4. Deploy the `main` branch.
-5. Add the Vercel domain to Supabase Auth redirect/site URL settings.
+4. Add the Firebase AI variables listed in [ai-goal-detection.md](ai-goal-detection.md) if enabling AI goal detection.
+5. Deploy the `main` branch.
+6. Add the Vercel domain to Supabase Auth redirect/site URL settings.
 
 Once Git integration is configured, pushes to `main` trigger automatic deployments. Pull requests can be configured for preview deployments.
 
