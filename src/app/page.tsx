@@ -508,6 +508,7 @@ export default function HomePage() {
 
   async function loadVideo() {
     setAiCandidates([]);
+    setAiConsent(false);
     setAiError("");
     setAiStatus("");
     const id = parseYouTubeId(videoUrl);
@@ -549,6 +550,7 @@ export default function HomePage() {
 
   function openSavedMatch(match: Match) {
     setAiCandidates([]);
+    setAiConsent(false);
     setAiError("");
     setAiStatus("");
     const id = parseYouTubeId(match.youtube_url);
