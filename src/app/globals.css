@@ -230,3 +230,15 @@ tbody tr:hover { background: #ffffff06; }
 .event-feed-table td.event-delete-cell {
   text-align: right;
 }
+
+/* Public match view: keep the event timeline alongside the dominant video. */
+.public-event-scroll {
+  max-height: calc(83svh - 82px);
+  overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .public-event-scroll {
+    max-height: 55svh;
+  }
+}
