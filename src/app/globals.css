@@ -50,46 +50,68 @@ tbody tr:hover { background: #ffffff06; }
 .scrollbar::-webkit-scrollbar-thumb { background: #33485b; border-radius: 8px; }
 
 
-/* Responsive analysis workspace: keep the video and event controls visible together. */
+/* Desktop/tablet analysis desk: dominant video on the left, compact controls on the right. */
+.analysis-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
+  align-items: start;
+  gap: 12px;
+}
+.analysis-video-panel {
+  min-width: 0;
+}
 .video-stage {
-  height: clamp(150px, 36svh, 390px);
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
 }
 .video-stage > #sportanalist-player {
   width: 100%;
   height: 100%;
 }
 .event-capture-panel {
-  gap: 8px;
+  min-width: 0;
+  gap: 7px;
+  padding: 8px;
 }
 .event-matrix {
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
 }
 .event-grid {
   min-width: 0;
+  grid-template-columns: minmax(74px, 1.2fr) repeat(3, minmax(0, 1fr));
+  gap: 2px 3px;
 }
 .event-shortcut {
+  height: 21px;
+  width: 24px;
   padding: 0;
+  border-radius: 5px;
 }
 .mobile-view-only {
   display: none;
 }
 
-@media (max-height: 760px) and (min-width: 768px) {
-  .video-stage {
-    height: clamp(140px, 31svh, 300px);
+@media (min-width: 768px) and (max-width: 1050px) {
+  .analysis-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(275px, 315px);
+    gap: 9px;
+  }
+  .event-grid {
+    grid-template-columns: minmax(66px, 1.1fr) repeat(3, minmax(0, 1fr));
   }
   .event-capture-panel {
-    gap: 6px;
-    padding: 8px;
-  }
-  .event-matrix {
-    gap: 6px;
+    padding: 7px;
   }
 }
 
 @media (max-width: 767px) {
+  .analysis-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .video-stage {
-    height: auto;
     aspect-ratio: 16 / 9;
     max-height: 48svh;
     min-height: 160px;
@@ -102,19 +124,7 @@ tbody tr:hover { background: #ffffff06; }
   }
 }
 
-@media (min-width: 768px) and (max-width: 1100px) {
-  .video-stage {
-    height: clamp(190px, 34svh, 330px);
-  }
-  .event-matrix {
-    grid-template-columns: minmax(68px, 1.1fr) repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 420px) {
-  .video-stage {
-    min-height: 140px;
-  }
   td, th {
     padding: 8px 7px;
   }
