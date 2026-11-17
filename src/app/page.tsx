@@ -469,14 +469,27 @@ export default function HomePage() {
   }
 
   function exportCsv() {
-    const rows = [
-      ["video_second", "event_pt", "event_en", "moment", "zone", "outcome", "attacking_team", "defending_team", "youtube_url"],
-      ...filteredRecords.map((record) => [record.video_second, record.event_name_pt, record.event_name_en, record.moment, record.zone, record.outcome ?? "",
-        record.attacking_team ?? "", record.defending_team ?? "", record.youtube_url]),
-    ];
-    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
+    const headers = language === "pt"
+      ? ["Link", "Evento", "Momento", "Zona", "Resultado"]
+      : ["Link", "Event", "Moment", "Zone", "Outcome"];
+    const rows = eventFeedRecords.map((record) => [
+      record.youtube_url || youtubeMoment(loadedUrl, record.video_second),
+      language === "pt" ? record.event_name_pt : record.event_name_en,
+      record.moment === "attack" ? t.attackMoment : t.defenseMoment,
+      ZONE_LABELS[record.zone][language],
+      record.outcome ?? "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";"))
+      .join("\r\n");
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "sportanalist-events.csv"; anchor.click(); URL.revokeObjectURL(url);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = language === "pt" ? "sportanalist-eventos.csv" : "sportanalist-events.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   const totalAttacks = records.filter((record) => record.moment === "attack").length;
@@ -632,7 +645,14 @@ export default function HomePage() {
             <section className="event-feed overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
               <div className="flex items-center justify-between border-b border-[#263646] px-2 py-1.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Eventos registados" : "Recorded events"}</span>
-                <span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#66e99f]">{records.length}</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={exportCsv} disabled={eventFeedRecords.length === 0}
+                    className="inline-flex items-center gap-1 rounded border border-[#31475a] px-2 py-1 text-[9px] text-[#c1cfdb] hover:border-[#5f819e] disabled:cursor-not-allowed disabled:opacity-35"
+                    title={t.export} aria-label={t.export}>
+                    <ArrowDownToLine size={12} />{t.export}
+                  </button>
+                  <span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#66e99f]">{records.length}</span>
+                </div>
               </div>
               {eventFeedRecords.length === 0 ? <p className="muted px-2 py-3 text-[10px]">{t.empty}</p> : <div className="max-h-[30svh] overflow-y-auto">
                 <table className="event-feed-table w-full table-fixed">
