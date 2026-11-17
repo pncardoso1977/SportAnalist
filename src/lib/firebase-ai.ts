@@ -158,7 +158,7 @@ export async function analyzeYouTubeGoals(input: AnalyzeYouTubeGoalsInput): Prom
     "8. Zona: indica \"left\", \"center\" ou \"right\" apenas como melhor estimativa da zona de origem da ação; se não for possível, usa \"center\".",
     "",
     "Responde APENAS com JSON válido, sem Markdown, no formato:",
-    "{\"goals\":[{\"timestamp_seconds\":37,\"scoring_team\":\"analysed\",\"player_name\":\"Nome ou null\",\"player_number\":\"5 ou null\",\"confidence\":0.92,\"zone\":\"center\",\"evidence\":\"Descrição concisa dos sinais visuais e sonoros.\"}]}",
+    "{\"goals\":[{\"timestamp_seconds\":37,\"scoring_team\":\"analysed\",\"player_name\":null,\"player_number\":\"5\",\"confidence\":0.92,\"zone\":\"center\",\"evidence\":\"Descrição concisa dos sinais visuais e sonoros.\"}]}",
     "Se não houver golos confirmáveis, devolve {\"goals\":[]}."
   ].join("\n");
 
