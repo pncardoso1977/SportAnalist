@@ -2,7 +2,7 @@
 
 ## 1. Supabase
 1. Create a Supabase project on the free plan.
-2. Open SQL Editor and run `supabase/migrations/0001_initial_schema.sql`.
+2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql`.
 3. In Authentication settings, configure the allowed site URL and email confirmation policy.
 4. Copy the Project URL and publishable key. Do not expose a service-role key in browser code.
 
