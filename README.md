@@ -11,6 +11,8 @@ Aplicação web bilingue (PT/EN) para análise técnico-tática de futsal com v�
 - GitHub Actions para validação
 
 ## Arranque local
+Requer Node.js 24.x (ver `.nvmrc` e `engines` em `package.json`).
+
 ```bash
 npm install
 cp .env.example .env.local
