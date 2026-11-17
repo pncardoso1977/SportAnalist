@@ -105,6 +105,14 @@ function zonesForEvent(event: EventType): Zone[] {
   return ["left", "center", "right"];
 }
 
+function eventNamesForMoment(eventType: EventType, moment: EventMoment) {
+  const namePt = eventType.name_pt.replace(/\\s+contra$/i, "").trim();
+  const nameEn = eventType.name_en.replace(/^opposition\\s+/i, "").replace(/\\s+\\(against\\)$/i, "").trim();
+  return moment === "defense"
+    ? { pt: `${namePt} Contra`, en: `Opposition ${nameEn}` }
+    : { pt: namePt, en: nameEn };
+}
+
 function youtubeMoment(base: string, seconds: number) {
   if (!base) return "";
   const id = parseYouTubeId(base);
@@ -125,7 +133,6 @@ export default function HomePage() {
   const [outcomeText, setOutcomeText] = useState("");
   const [newNamePt, setNewNamePt] = useState("");
   const [newNameEn, setNewNameEn] = useState("");
-  const [newIsCounter, setNewIsCounter] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState<AppRole>("analyst");
   const [filterEvent, setFilterEvent] = useState("all");
@@ -154,6 +161,7 @@ export default function HomePage() {
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
   }, []);
   const activeEvents = events.filter((event) => event.active);
+  const eventRows = activeEvents.filter((event) => !event.is_counter);
 
   useEffect(() => { eventTypesRef.current = events; }, [events]);
 
@@ -186,7 +194,8 @@ export default function HomePage() {
           .select("*, event_types(name_pt,name_en)").eq("match_id", cloudMatchId).order("created_at", { ascending: false });
         if (rows && !cancelled) setRecords((rows as DbMatchEventRow[]).map((row) => ({
           id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
-          event_name_pt: row.event_types?.name_pt ?? "Evento", event_name_en: row.event_types?.name_en ?? "Event",
+          event_name_pt: row.event_types ? eventNamesForMoment(row.event_types as EventType, row.moment).pt : "Evento",
+          event_name_en: row.event_types ? eventNamesForMoment(row.event_types as EventType, row.moment).en : "Event",
           video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
           defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
           youtube_url: row.youtube_url,
@@ -201,7 +210,8 @@ export default function HomePage() {
           const eventType = eventTypesRef.current.find((event) => event.id === row.event_type_id);
           setRecords((current) => current.some((entry) => entry.id === row.id) ? current : [{
             id: row.id, match_id: row.match_id, event_type_id: row.event_type_id,
-            event_name_pt: eventType?.name_pt ?? "Evento", event_name_en: eventType?.name_en ?? "Event",
+            event_name_pt: eventType ? eventNamesForMoment(eventType, row.moment).pt : "Evento",
+            event_name_en: eventType ? eventNamesForMoment(eventType, row.moment).en : "Event",
             video_second: row.video_second, moment: row.moment, zone: row.zone, outcome: row.outcome, attacking_team: row.attacking_team,
             defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
           }, ...current]);
@@ -291,9 +301,9 @@ export default function HomePage() {
     return timeDifference || records.indexOf(b) - records.indexOf(a);
   }), [records]);
 
-  async function registerEvent(eventType: EventType, eventZone: Zone) {
+  async function registerEvent(eventType: EventType, eventZone: Zone, moment: EventMoment) {
     if (!canRecord) return;
-    const moment: EventMoment = eventType.is_counter ? "defense" : "attack";
+    const eventNames = eventNamesForMoment(eventType, moment);
     const second = Math.max(0, Math.floor(playerRef.current?.getCurrentTime?.() ?? currentSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
     const outcome = outcomeText.trim() || null;
@@ -310,7 +320,7 @@ export default function HomePage() {
       if (error) { setMessage(error.message); return; }
       const saved: MatchEvent = {
         id: data.id, match_id: cloudMatchId, event_type_id: eventType.id,
-        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
+        event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
         attacking_team: attacking, defending_team: defending, created_by: cloudUserId,
         created_at: data.created_at, youtube_url: videoMoment,
@@ -320,7 +330,7 @@ export default function HomePage() {
     } else {
       const localRecord: MatchEvent = {
         id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id,
-        event_name_pt: eventType.name_pt, event_name_en: eventType.name_en,
+        event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
         attacking_team: attacking, defending_team: defending, created_by: null,
         created_at: new Date().toISOString(), youtube_url: videoMoment,
@@ -412,7 +422,7 @@ export default function HomePage() {
     if (!newNamePt.trim() || !newNameEn.trim()) { setMessage(t.eventRequired); return; }
     const eventType: EventType = {
       id: crypto.randomUUID(), name_pt: newNamePt.trim(), name_en: newNameEn.trim(),
-      is_counter: newIsCounter, active: true, sort_order: events.length * 10 + 10,
+      is_counter: false, active: true, sort_order: events.length * 10 + 10,
     };
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
@@ -423,7 +433,7 @@ export default function HomePage() {
       if (error) { setMessage(error.message); return; }
     }
     setEvents((current) => [...current, eventType]);
-    setNewNamePt(""); setNewNameEn(""); setNewIsCounter(false); setMessage(t.created);
+    setNewNamePt(""); setNewNameEn(""); setMessage(t.created);
   }
 
   async function addProjectMember() {
@@ -448,7 +458,7 @@ export default function HomePage() {
   }
 
   const totalAttacks = records.filter((record) => record.moment === "attack").length;
-  const totalCounters = records.filter((record) => events.find((event) => event.id === record.event_type_id)?.is_counter).length;
+  const totalCounters = records.filter((record) => record.moment === "defense").length;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col gap-4 px-3 py-3 md:px-5 md:py-4">
@@ -557,41 +567,39 @@ export default function HomePage() {
           </section>
 
           {hasActiveMatch && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
-            <div className="event-matrix grid grid-cols-1 gap-2">
-              {(["attack", "defense"] as EventMoment[]).map((moment) => {
-                const momentEvents = activeEvents.filter((event) => event.is_counter === (moment === "defense"));
-                const momentIsAttack = moment === "attack";
-                const momentColor = momentIsAttack
-                  ? { heading: "text-[#79e9aa]", panel: "border-[#284a3b] bg-[#0d1d19]", button: "border-[#315b47] bg-[#112820] hover:border-[#62df98]", icon: "text-[#90d5ad]" }
-                  : { heading: "text-[#f0b08d]", panel: "border-[#59413a] bg-[#211713]", button: "border-[#694a40] bg-[#321f19] hover:border-[#dd9874]", icon: "text-[#d7a38c]" };
-                const heading = momentIsAttack ? t.attackMoment : t.defenseMoment;
-                return <section key={moment} className={`rounded-lg border p-2 ${momentColor.panel}`}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className={`text-xs font-semibold ${momentColor.heading}`}>{heading}</h3>
-                    
-                  </div>
-                  <div className="event-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5">
-                    <div />
-                    {(["left", "center", "right"] as Zone[]).map((eventZone) => <div key={eventZone} className="truncate px-0.5 pb-1 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{ZONE_LABELS[eventZone][language]}</div>)}
-                    {momentEvents.map((event) => {
-                      const allowedZones = zonesForEvent(event);
-                      return <div key={event.id} className="contents">
-                        <div className="truncate py-1 pr-1 text-[10px] font-medium" title={language === "pt" ? event.name_pt : event.name_en}>{language === "pt" ? event.name_pt : event.name_en}</div>
-                        {(["left", "center", "right"] as Zone[]).map((eventZone) => allowedZones.includes(eventZone)
-                          ? <div key={eventZone} className="flex items-center justify-center">
-                              <button type="button" disabled={!canRecord} title={`${language === "pt" ? event.name_pt : event.name_en} · ${ZONE_LABELS[eventZone][language]}`}
-                                aria-label={`Registar ${language === "pt" ? event.name_pt : event.name_en} · ${ZONE_LABELS[eventZone][language]}`}
-                                onClick={() => void registerEvent(event, eventZone)}
-                                className={`event-shortcut flex h-5 w-6 items-center justify-center rounded border ${momentColor.button} disabled:cursor-not-allowed disabled:opacity-35`}>
-                                <Plus size={11} className={momentColor.icon} />
-                              </button>
-                            </div>
-                          : <div key={eventZone} className="flex items-center justify-center text-[10px] text-[#526170]">—</div>)}
-                      </div>;
-                    })}
-                  </div>
-                </section>;
-              })}
+            <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] text-[#f0b08d]"><span className="event-legend-plus event-legend-defense">+</span>{language === "pt" ? "Defesa (Contra)" : "Defence (against)"}</span>
+            </div>
+            <div className="event-single-list overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
+              <div className="event-grid event-single-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
+                <div className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.event}</div>
+                {(["left", "center", "right"] as Zone[]).map((eventZone) => <div key={eventZone} className="truncate px-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{ZONE_LABELS[eventZone][language]}</div>)}
+                {eventRows.map((event) => {
+                  const allowedZones = zonesForEvent(event);
+                  const name = language === "pt" ? event.name_pt : event.name_en;
+                  return <div key={event.id} className="contents">
+                    <div className="truncate py-1 pr-1 text-[10px] font-medium" title={name}>{name}</div>
+                    {(["left", "center", "right"] as Zone[]).map((eventZone) => allowedZones.includes(eventZone)
+                      ? <div key={eventZone} className="flex items-center justify-center gap-1">
+                          <button type="button" disabled={!canRecord} title={`${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                            aria-label={`Registar ${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                            onClick={() => void registerEvent(event, eventZone, "attack")}
+                            className="event-shortcut event-shortcut-attack flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                            <Plus size={10} />
+                          </button>
+                          <button type="button" disabled={!canRecord} title={`${language === "pt" ? "Defesa (Contra)" : "Defence (against)"} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                            aria-label={`Registar Defesa Contra · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                            onClick={() => void registerEvent(event, eventZone, "defense")}
+                            className="event-shortcut event-shortcut-defense flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                            <Plus size={10} />
+                          </button>
+                        </div>
+                      : <div key={eventZone} className="flex items-center justify-center text-[10px] text-[#526170]">—</div>)}
+                  </div>;
+                })}
+              </div>
             </div>
 
             <label className="block text-[10px] font-semibold text-[#a8b8c7]">
@@ -608,7 +616,7 @@ export default function HomePage() {
                 <table className="event-feed-table w-full table-fixed">
                   <thead><tr><th className="w-[54px]">{t.time}</th><th>{t.event}</th><th className="w-[56px]">{t.momentColumn}</th><th className="w-[28px] text-right"></th></tr></thead>
                   <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
-                    <td><button type="button" className="event-time-link font-mono text-[8px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
+                    <td><button type="button" className="event-time-link font-mono text-[10px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
                     <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>{language === "pt" ? record.event_name_pt : record.event_name_en}</td>
                     <td className="event-moment-cell" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
                     <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
@@ -634,7 +642,6 @@ export default function HomePage() {
             <label className="text-[11px] text-[#9eb0c0]">{t.newEvent}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNamePt} onChange={(e) => setNewNamePt(e.target.value)} placeholder="Ex.: Remate" /></label>
             <label className="text-[11px] text-[#9eb0c0]">{t.newEventEn}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
             <button className="btn btn-primary h-[38px] text-xs" onClick={() => void createEventType()}><FilePlus2 size={13} />{t.create}</button>
-            <label className="flex items-center gap-2 text-[11px] text-[#b4c2ce] md:col-span-3"><input type="checkbox" checked={newIsCounter} onChange={(e) => setNewIsCounter(e.target.checked)} className="accent-[#35d07f]" />{t.counter}</label>
           </section>}
 
           <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#263646] pt-3">
