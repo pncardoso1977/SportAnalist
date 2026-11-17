@@ -175,3 +175,58 @@ tbody tr:hover { background: #ffffff06; }
   padding-left: 6px;
   white-space: nowrap;
 }
+
+
+/* Unified event list: green plus records attack; amber plus records defence/against. */
+.event-legend-plus {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+}
+.event-legend-attack {
+  color: #79e9aa;
+  border: 1px solid #315b47;
+  background: #112820;
+}
+.event-legend-defense {
+  color: #f0b08d;
+  border: 1px solid #694a40;
+  background: #321f19;
+}
+.event-shortcut-attack {
+  color: #79e9aa;
+  border-color: #315b47;
+  background: #112820;
+}
+.event-shortcut-attack:hover {
+  border-color: #62df98;
+  background: #183b2d;
+}
+.event-shortcut-defense {
+  color: #f0b08d;
+  border-color: #694a40;
+  background: #321f19;
+}
+.event-shortcut-defense:hover {
+  border-color: #dd9874;
+  background: #432a22;
+}
+.event-single-grid > div:nth-child(4n + 1) {
+  text-align: left;
+}
+.event-feed-table th,
+.event-feed-table td {
+  text-align: left;
+}
+.event-feed-table td.event-moment-cell {
+  text-align: left !important;
+}
+.event-feed-table td.event-delete-cell {
+  text-align: right;
+}
