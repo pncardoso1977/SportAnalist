@@ -32,7 +32,7 @@ export function isFirebaseAIConfigured(): boolean {
   return Boolean(FIREBASE_API_KEY && FIREBASE_APP_ID && FIREBASE_PROJECT_ID && APP_CHECK_SITE_KEY);
 }
 
-function getGenerativeModel() {
+function createGenerativeModel() {
   if (!isFirebaseAIConfigured()) {
     throw new Error("Firebase AI Logic is not configured. Add the Firebase web app settings and the reCAPTCHA v3 App Check site key to the environment variables.");
   }
@@ -105,7 +105,8 @@ function parseGoals(raw: string): DetectedGoal[] {
   const goals: DetectedGoal[] = [];
   for (const item of parsed.goals) {
     if (!isObject(item)) continue;
-    const second = Number(item.timestamp_seconds);
+    if (typeof item.timestamp_seconds !== "number") continue;
+    const second = item.timestamp_seconds;
     if (!Number.isFinite(second) || second < 0) continue;
     const roundedSecond = Math.max(0, Math.round(second));
     if (seen.has(roundedSecond)) continue;
@@ -138,7 +139,7 @@ function parseGoals(raw: string): DetectedGoal[] {
  * The video itself is not downloaded by SportAnalist or routed through Vercel.
  */
 export async function analyzeYouTubeGoals(input: AnalyzeYouTubeGoalsInput): Promise<DetectedGoal[]> {
-  const model = getGenerativeModel();
+  const model = createGenerativeModel();
   const prompt = [
     "Analisa o vídeo completo de um jogo de futsal e identifica APENAS golos realmente marcados.",
     "",
