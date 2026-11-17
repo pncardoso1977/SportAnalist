@@ -63,17 +63,15 @@ tbody tr:hover { background: #ffffff06; }
 .analysis-workspace.without-event-controls .analysis-video-panel {
   width: 100%;
 }
-.analysis-workspace.without-event-controls .video-stage {
-  width: min(100%, calc(min(62svh, 520px) * 1.77778));
-  max-height: min(62svh, 520px);
-}
 .analysis-video-panel {
   min-width: 0;
 }
 .video-stage {
-  width: min(100%, calc(min(49svh, 410px) * 1.77778));
+  /* Target 80% of the visible viewport height; width follows the 16:9 ratio.
+     The available parent width remains the only constraint when side controls are visible. */
+  width: min(100%, calc(80svh * 16 / 9));
   height: auto;
-  max-height: min(49svh, 410px);
+  max-height: none;
   aspect-ratio: 16 / 9;
   background: #000;
   margin-left: 0;
@@ -146,9 +144,10 @@ tbody tr:hover { background: #ffffff06; }
     grid-template-columns: minmax(0, 1fr);
   }
   .video-stage {
+    width: min(100%, calc(80svh * 16 / 9));
     aspect-ratio: 16 / 9;
-    max-height: 42svh;
-    min-height: 140px;
+    max-height: none;
+    min-height: 0;
   }
   .event-capture-panel {
     display: none !important;
