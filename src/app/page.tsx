@@ -536,7 +536,7 @@ export default function HomePage() {
             <p className="muted">{t.noActiveMatch}</p>
           </div>}
 
-          <div className="analysis-workspace grid min-w-0 items-start gap-3">
+          <div className={`analysis-workspace grid min-w-0 items-start gap-3 ${hasActiveMatch ? "with-event-controls" : "without-event-controls"}`}>
           <section className="analysis-video-panel panel min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#263646] px-3 py-2">
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
