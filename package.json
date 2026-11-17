@@ -29,5 +29,8 @@
   },
   "overrides": {
     "@typescript-eslint/types": "8.72.2"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
