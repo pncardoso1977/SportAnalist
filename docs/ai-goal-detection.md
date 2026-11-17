@@ -20,8 +20,8 @@ Use a Firebase project owned by the club / organisation:
 
 1. In Firebase Console, create or select a project and register a **Web app**. Keep the web app configuration available.
 2. Open **AI Services → AI Logic → Get started**. Select **Gemini Developer API** (not the Agent Platform / Vertex AI provider) and complete the guided setup. This enables Firebase AI Logic and Gemini Developer API for the project.
-3. Register App Check for the Web app with a reCAPTCHA v3 provider. Create a reCAPTCHA v3 key for the production domain and enter its secret key in Firebase App Check. Keep the site key for the frontend configuration. Do not put the reCAPTCHA secret key in the application.
-4. In Firebase App Check, enforce App Check for **Firebase AI Logic**. The application initialises the reCAPTCHA v3 provider and sends App Check tokens with its requests.
+3. Create a score-based **reCAPTCHA Enterprise** key in Google Cloud Console under the same `sport-analist` project. Choose a Web key, leave the checkbox challenge disabled, and add `sport-analist.vercel.app` as an allowed domain. Keep the public site key. Do not put a reCAPTCHA secret in the application.
+4. In Firebase Console, open **Security → App Check → Apps**, register `SportAnalist Web` with the **reCAPTCHA Enterprise** provider, and use the same public site key. The guided Firebase AI Logic setup enforces App Check for Firebase AI Logic. The application initialises the `ReCaptchaEnterpriseProvider` and sends App Check tokens with its requests.
 5. Add these values to Vercel → Project → Settings → Environment Variables (Production, and Preview if used):
    - `NEXT_PUBLIC_FIREBASE_API_KEY`: the Firebase Web app `apiKey`.
    - `NEXT_PUBLIC_FIREBASE_APP_ID`: the Firebase Web app `appId`.
@@ -29,7 +29,7 @@ Use a Firebase project owned by the club / organisation:
    - `NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY`: the reCAPTCHA v3 **site** key (not the secret).
 6. Redeploy the Vercel application after adding or changing environment variables.
 
-For local testing, use a separate development reCAPTCHA key for `localhost` or implement the Firebase App Check debug provider. Do not add `localhost` to the production reCAPTCHA key.
+For local testing, use a separate development reCAPTCHA Enterprise key for `localhost` or implement the Firebase App Check debug provider. Do not add `localhost` to the production reCAPTCHA key.
 
 The Firebase web configuration and reCAPTCHA site key are public client configuration. Do not add a Gemini standalone API key, service-account key, Firebase Admin credential, or reCAPTCHA secret to `NEXT_PUBLIC_*` variables or frontend code. The Firebase AI Logic setup workflow configures the Gemini Developer API access for the Firebase project.
 
