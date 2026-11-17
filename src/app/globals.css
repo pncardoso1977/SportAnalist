@@ -57,6 +57,16 @@ tbody tr:hover { background: #ffffff06; }
   align-items: start;
   gap: 12px;
 }
+.analysis-workspace.without-event-controls {
+  grid-template-columns: minmax(0, 1fr);
+}
+.analysis-workspace.without-event-controls .analysis-video-panel {
+  width: 100%;
+}
+.analysis-workspace.without-event-controls .video-stage {
+  width: min(100%, calc(min(62svh, 520px) * 1.77778));
+  max-height: min(62svh, 520px);
+}
 .analysis-video-panel {
   min-width: 0;
 }
