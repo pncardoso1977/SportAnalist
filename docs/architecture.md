@@ -65,3 +65,12 @@ Apply `supabase/migrations/0003_team_event_association.sql` after migrations `00
 A match editor (`admin` or `analyst`) can create or revoke an unlisted public URL for one match. Share tokens are stored in `match_public_shares`, separate from `matches`, with no direct API privileges for `anon` or `authenticated`. The public client calls `get_public_match_analysis(token)`, a security-definer RPC which returns a restricted JSON projection for the matching token only: teams, YouTube URL and event timeline fields. It does not return project identifiers, users, authors, membership data or other matches.
 
 Apply `supabase/migrations/0004_public_match_sharing.sql` after migrations `0001`, `0002` and `0003`. Editors use `create_match_share` and `revoke_match_share`; the read-only public page is `/share/[token]`.
+
+
+## AI-assisted goal detection
+
+The editor invokes Firebase AI Logic from the browser using the saved YouTube URL as a `fileData` input to `gemini-3.5-flash-lite`. Public and unlisted YouTube URLs are supported by the Gemini Developer API through Firebase AI Logic. Image frames and the audio track are analysed together. The application does not download or proxy the source video.
+
+AI results are suggestions only. An editor confirms the scoring side and event details before the normal `match_events` insertion path is called. This preserves the existing invariant: `attack` belongs to the analysed team; `defense` belongs to the opponent. The editor provides the kit colours as prompt context. A candidate with an uncertain scoring side cannot be saved until the editor selects a team.
+
+Firebase App Check is initialised with the reCAPTCHA v3 site key. See [ai-goal-detection.md](ai-goal-detection.md) for Firebase, App Check and Vercel configuration, free-tier data handling and known limitations.
