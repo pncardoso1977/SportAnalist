@@ -98,3 +98,62 @@ create index if not exists match_events_team_created_idx
   on public.match_events(team_id, created_at desc);
 create index if not exists match_events_team_moment_idx
   on public.match_events(team_id, moment, video_second);
+
+-- Keep the association consistent with the match, selected moment and attacking side.
+create or replace function public.validate_match_event_team_association()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  match_project_id uuid;
+  match_analysed_team text;
+  match_home_team text;
+  match_away_team text;
+  associated_project_id uuid;
+  associated_team_name text;
+  expected_team_name text;
+begin
+  select project_id, analyzed_team, home_team, away_team
+    into match_project_id, match_analysed_team, match_home_team, match_away_team
+  from public.matches
+  where id = new.match_id;
+
+  if match_project_id is null then
+    raise exception 'Match not found for event team association';
+  end if;
+
+  if new.moment = 'attack'::public.event_moment then
+    expected_team_name := match_analysed_team;
+  else
+    expected_team_name := case
+      when lower(btrim(match_home_team)) = lower(btrim(match_analysed_team)) then match_away_team
+      when lower(btrim(match_away_team)) = lower(btrim(match_analysed_team)) then match_home_team
+      else match_away_team
+    end;
+  end if;
+
+  select project_id, normalized_name
+    into associated_project_id, associated_team_name
+  from public.teams
+  where id = new.team_id;
+
+  if associated_project_id is null or associated_project_id <> match_project_id then
+    raise exception 'Event team must belong to the same project as the match';
+  end if;
+
+  if lower(btrim(coalesce(new.attacking_team, ''))) <> lower(btrim(expected_team_name))
+     or associated_team_name <> lower(btrim(expected_team_name)) then
+    raise exception 'Event team must be the analysed team for attack or the opponent for defence';
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists validate_match_event_team_association on public.match_events;
+create trigger validate_match_event_team_association
+before insert or update of match_id, team_id, moment, attacking_team
+on public.match_events
+for each row execute function public.validate_match_event_team_association();
