@@ -15,6 +15,7 @@ export type MatchEvent = {
   id: string;
   match_id: string;
   event_type_id: string;
+  team_id: string | null;
   event_name_pt: string;
   event_name_en: string;
   video_second: number;
