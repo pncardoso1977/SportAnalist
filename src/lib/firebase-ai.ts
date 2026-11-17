@@ -39,6 +39,9 @@ function getGenerativeModel() {
   if (typeof window === "undefined") {
     throw new Error("Video analysis can only run in the browser.");
   }
+  if (!APP_CHECK_SITE_KEY) {
+    throw new Error("A reCAPTCHA v3 App Check site key is required.");
+  }
 
   const config: FirebaseOptions = {
     apiKey: FIREBASE_API_KEY,
