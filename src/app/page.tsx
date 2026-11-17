@@ -106,8 +106,15 @@ function zonesForEvent(event: EventType): Zone[] {
 }
 
 function eventNamesForMoment(eventType: EventType, moment: EventMoment) {
-  const namePt = eventType.name_pt.replace(/\\s+contra$/i, "").trim();
-  const nameEn = eventType.name_en.replace(/^opposition\\s+/i, "").replace(/\\s+\\(against\\)$/i, "").trim();
+  const namePt = eventType.name_pt.toLowerCase().endsWith(" contra")
+    ? eventType.name_pt.slice(0, -7).trim()
+    : eventType.name_pt.trim();
+  const englishName = eventType.name_en.trim();
+  const nameEn = englishName.toLowerCase().startsWith("opposition ")
+    ? englishName.slice(11).trim()
+    : englishName.toLowerCase().endsWith(" (against)")
+      ? englishName.slice(0, -10).trim()
+      : englishName;
   return moment === "defense"
     ? { pt: `${namePt} Contra`, en: `Opposition ${nameEn}` }
     : { pt: namePt, en: nameEn };
