@@ -542,7 +542,8 @@ export default function HomePage() {
             <p className="muted">{t.noActiveMatch}</p>
           </div>}
 
-          <section className="panel overflow-hidden">
+          <div className="analysis-workspace grid min-w-0 items-start gap-3">
+          <section className="analysis-video-panel panel min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#263646] px-3 py-2">
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
               <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-1.5 inline" size={13} />{formatTime(currentSecond)}</span>
@@ -557,7 +558,7 @@ export default function HomePage() {
           </section>
 
           {hasActiveMatch && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
-            <div className="event-matrix grid gap-2 xl:grid-cols-2">
+            <div className="event-matrix grid grid-cols-1 gap-2">
               {(["attack", "defense"] as EventMoment[]).map((moment) => {
                 const momentEvents = activeEvents.filter((event) => event.is_counter === (moment === "defense"));
                 const momentIsAttack = moment === "attack";
@@ -568,7 +569,7 @@ export default function HomePage() {
                 return <section key={moment} className={`rounded-lg border p-2 ${momentColor.panel}`}>
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className={`text-xs font-semibold ${momentColor.heading}`}>{heading}</h3>
-                    <span className="text-[10px] muted">{momentEvents.length} {t.events.toLowerCase()}</span>
+                    
                   </div>
                   <div className="event-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5">
                     <div />
@@ -602,6 +603,7 @@ export default function HomePage() {
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
           </section>}
           {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
+          </div>
 
           {hasActiveMatch && <>
             <section className="grid gap-2 sm:grid-cols-3">
