@@ -10,6 +10,7 @@ import { getSupabase } from "@/lib/supabase";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
 import { analyzeYouTubeGoals, isFirebaseAIConfigured, type DetectedGoal } from "@/lib/firebase-ai";
+import { calculateGoalScores, formatGoalScore } from "@/lib/goal-score";
 
 type Language = "pt" | "en";
 type AiGoalSuggestion = DetectedGoal & { id: string; confirmed: boolean };
@@ -341,6 +342,7 @@ export default function HomePage() {
     const timeDifference = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     return timeDifference || records.indexOf(b) - records.indexOf(a);
   }), [records]);
+  const goalScores = useMemo(() => calculateGoalScores(records), [records]);
 
   async function registerEvent(
     eventType: EventType,
@@ -893,7 +895,10 @@ export default function HomePage() {
                   <thead><tr><th className="w-[54px]">{t.time}</th><th>{t.event}</th><th className="w-[56px]">{t.momentColumn}</th><th className="w-[28px] text-right"></th></tr></thead>
                   <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
                     <td><button type="button" className="event-time-link font-mono text-[10px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
-                    <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>{language === "pt" ? record.event_name_pt : record.event_name_en}</td>
+                    <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>
+                      <span>{language === "pt" ? record.event_name_pt : record.event_name_en}</span>
+                      {goalScores.has(record.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(record.id)!)}</span>}
+                    </td>
                     <td className="event-moment-cell" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
                     <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
                   </tr>)}</tbody>
