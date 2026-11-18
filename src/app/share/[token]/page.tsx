@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { Activity, ExternalLink, Play, ShieldAlert, Video } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { ZONE_LABELS, type EventMoment, type Zone } from "@/lib/types";
+import { calculateGoalScores, formatGoalScore } from "@/lib/goal-score";
 
 type PublicMatch = {
   id: string;
@@ -98,6 +99,7 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
   }, [supabase, token, language]);
 
   const events = analysis?.events ?? [];
+  const goalScores = useMemo(() => calculateGoalScores(events), [events]);
   const videoId = analysis ? parseYouTubeId(analysis.match.youtube_url) : null;
   const opponent = analysis
     ? analysis.match.home_team === analysis.match.analyzed_team
@@ -263,7 +265,10 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
                           <ExternalLink size={12} />
                         </a>
                       </div>
-                      <p className="mt-1 break-words text-xs font-semibold">{eventName(event, language)}</p>
+                      <p className="mt-1 break-words text-xs font-semibold">
+                        <span>{eventName(event, language)}</span>
+                        {goalScores.has(event.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(event.id)!)}</span>}
+                      </p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[9px]">
                         <span className={event.moment === "attack"
                           ? "rounded border border-[#315b47] bg-[#112820] px-1.5 py-0.5 text-[#79e9aa]"
