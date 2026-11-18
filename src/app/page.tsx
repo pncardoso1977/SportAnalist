@@ -351,7 +351,10 @@ export default function HomePage() {
   ): Promise<boolean> {
     if (!canRecord) return false;
     const eventNames = eventNamesForMoment(eventType, moment);
-    const second = Math.max(0, Math.floor(secondOverride ?? playerRef.current?.getCurrentTime?.() ?? currentSecond));
+    const capturedSecond = secondOverride ?? playerRef.current?.getCurrentTime?.() ?? currentSecond;
+    // Manual captures are timestamped 10 seconds before the click to include the build-up.
+    // AI candidates already carry a detected timestamp, so keep those unchanged.
+    const second = Math.max(0, Math.floor(secondOverride === undefined ? capturedSecond - 10 : capturedSecond));
     const videoMoment = youtubeMoment(loadedUrl, second);
     const outcome = outcomeOverride === undefined ? (outcomeText.trim() || null) : (outcomeOverride?.trim() || null);
 
