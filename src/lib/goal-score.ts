@@ -26,7 +26,6 @@ function isGoalEvent(event: GoalScoreEvent): boolean {
   const englishName = event.event_name_en
     .trim()
     .replace(/^opposition\s+/i, "")
-    .replace(/\s+\\(against\\)$/i, "")
     .toLocaleLowerCase("en");
 
   return portugueseName === "golo" || englishName === "goal";
