@@ -358,17 +358,44 @@ export default function HomePage() {
     const videoMoment = youtubeMoment(loadedUrl, second);
     const outcome = outcomeOverride === undefined ? (outcomeText.trim() || null) : (outcomeOverride?.trim() || null);
 
-    // The event belongs to the team whose phase is being analysed:
-    // attack -> analysed team; defence -> opponent.
-    const eventTeamName = moment === "attack" ? team : opponent;
-    const attacking = moment === "attack" ? team : opponent;
-    const defending = moment === "attack" ? opponent : team;
+    // Use the match record as the source of truth for team names.
+    // The editor fields can be changed after loading a match, but the database
+    // trigger validates event ownership against matches.analyzed_team.
+    let analysedTeamForEvent = team.trim();
+    let opponentForEvent = opponent.trim();
 
     if (supabase) {
       if (!cloudMatchId || !cloudUserId || !projectId) { setMessage(t.noAuth); return false; }
 
+      const { data: activeMatch, error: matchError } = await supabase.from("matches")
+        .select("home_team, away_team, analyzed_team")
+        .eq("id", cloudMatchId)
+        .single();
+
+      if (matchError || !activeMatch) {
+        setMessage(matchError?.message ?? t.saveError);
+        return false;
+      }
+
+      analysedTeamForEvent = activeMatch.analyzed_team.trim();
+      const homeIsAnalysed = activeMatch.home_team.trim().toLocaleLowerCase() === analysedTeamForEvent.toLocaleLowerCase();
+      const awayIsAnalysed = activeMatch.away_team.trim().toLocaleLowerCase() === analysedTeamForEvent.toLocaleLowerCase();
+
+      if (homeIsAnalysed === awayIsAnalysed) {
+        setMessage(language === "pt"
+          ? "A equipa analisada guardada neste jogo não corresponde exatamente a uma das equipas. Verifica a ficha do jogo antes de registar eventos."
+          : "The analysed team saved for this match does not match exactly one of the teams. Check the match details before recording events.");
+        return false;
+      }
+
+      opponentForEvent = homeIsAnalysed ? activeMatch.away_team.trim() : activeMatch.home_team.trim();
+
+      // Keep the editable fields aligned with the match actually being recorded.
+      if (team !== analysedTeamForEvent) setTeam(analysedTeamForEvent);
+      if (opponent !== opponentForEvent) setOpponent(opponentForEvent);
+
       const { data: eventTeam, error: teamError } = await supabase.from("teams")
-        .upsert({ project_id: projectId, name: eventTeamName.trim() }, { onConflict: "project_id,normalized_name" })
+        .upsert({ project_id: projectId, name: (moment === "attack" ? analysedTeamForEvent : opponentForEvent) }, { onConflict: "project_id,normalized_name" })
         .select("id")
         .single();
       if (teamError || !eventTeam) {
@@ -379,7 +406,8 @@ export default function HomePage() {
       const { data, error } = await supabase.from("match_events").insert({
         match_id: cloudMatchId, event_type_id: eventType.id, team_id: eventTeam.id,
         video_second: second, moment, zone: eventZone, outcome,
-        attacking_team: attacking, defending_team: defending,
+        attacking_team: moment === "attack" ? analysedTeamForEvent : opponentForEvent,
+        defending_team: moment === "attack" ? opponentForEvent : analysedTeamForEvent,
         youtube_url: videoMoment, created_by: cloudUserId,
       }).select("id, team_id, created_at").single();
       if (error) { setMessage(error.message); return false; }
@@ -397,7 +425,8 @@ export default function HomePage() {
         id: crypto.randomUUID(), match_id: "demo-match", event_type_id: eventType.id, team_id: null,
         event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
-        attacking_team: attacking, defending_team: defending, created_by: null,
+        attacking_team: moment === "attack" ? analysedTeamForEvent : opponentForEvent,
+        defending_team: moment === "attack" ? opponentForEvent : analysedTeamForEvent, created_by: null,
         created_at: new Date().toISOString(), youtube_url: videoMoment,
       };
       setRecords((current) => [localRecord, ...current]);
