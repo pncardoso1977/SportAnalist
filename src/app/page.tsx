@@ -415,7 +415,8 @@ export default function HomePage() {
         id: data.id, match_id: cloudMatchId, event_type_id: eventType.id, team_id: data.team_id,
         event_name_pt: eventNames.pt, event_name_en: eventNames.en,
         video_second: second, moment, zone: eventZone, outcome,
-        attacking_team: attacking, defending_team: defending, created_by: cloudUserId,
+        attacking_team: moment === "attack" ? analysedTeamForEvent : opponentForEvent,
+        defending_team: moment === "attack" ? opponentForEvent : analysedTeamForEvent, created_by: cloudUserId,
         created_at: data.created_at, youtube_url: videoMoment,
       };
       setRecords((current) => current.some((entry) => entry.id === saved.id) ? current : [saved, ...current]);
