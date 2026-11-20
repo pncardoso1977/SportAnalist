@@ -268,6 +268,9 @@ export default function LiveMatchManagementPage() {
   const publicUrl = activeMatch && typeof window !== "undefined"
     ? `${window.location.origin}/jogo-ao-vivo/${activeMatch.id}`
     : "";
+  const scheduledMatches = matches.filter((match) => match.live_status === "scheduled");
+  const liveMatches = matches.filter((match) => match.live_status === "live");
+  const finishedMatches = matches.filter((match) => match.live_status === "finished");
 
   const refreshMatches = useCallback(async () => {
     if (!supabase) return;
@@ -383,9 +386,7 @@ export default function LiveMatchManagementPage() {
       }
       setLoading(true);
       try {
-        const { data, error: rpcError } = await supabase.rpc("list_public_live_matches");
-        if (rpcError) throw rpcError;
-        if (!cancelled) setMatches(Array.isArray(data) ? data as LiveMatch[] : []);
+        await refreshMatches();
       } catch (loadError) {
         if (!cancelled) setError(getErrorMessage(loadError));
       } finally {
@@ -393,8 +394,18 @@ export default function LiveMatchManagementPage() {
       }
     }
     void initialise();
-    return () => { cancelled = true; };
-  }, [supabase]);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") {
+        void refreshMatches().catch((refreshError) => {
+          if (!cancelled) setError(getErrorMessage(refreshError));
+        });
+      }
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [refreshMatches, supabase]);
 
   async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -529,6 +540,21 @@ export default function LiveMatchManagementPage() {
     setHalfTimeImage(null);
     setFullReportImage(null);
     void loadMatchData(match.id);
+  }
+
+  function returnToMatchList() {
+    setActiveMatch(null);
+    setClock(null);
+    setPlayers([]);
+    setStints([]);
+    setEditingNames(false);
+    setPendingClockAction(null);
+    setReportStage(null);
+    setHalfTimeImage(null);
+    setFullReportImage(null);
+    setError("");
+    setMessage("");
+    void refreshMatches().catch((refreshError) => setError(getErrorMessage(refreshError)));
   }
 
   async function deleteScheduledMatch(match: LiveMatch) {
@@ -748,15 +774,15 @@ export default function LiveMatchManagementPage() {
               <section className="panel grid gap-3 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-sm font-semibold">Jogos por iniciar</h2>
-                  <button type="button" onClick={() => void refreshMatches()} className="btn !px-2.5 !py-2 text-xs" disabled={loading}>
-                    <RefreshCw size={13} />Atualizar
+                  <button type="button" onClick={() => void refreshMatches().catch((refreshError) => setError(getErrorMessage(refreshError)))} className="btn !px-2.5 !py-2 text-xs" disabled={loading}>
+                    <RefreshCw size={13} />Atualizar lista
                   </button>
                 </div>
-                {matches.length === 0 ? (
-                  <p className="muted text-xs">Não existem jogos agendados disponíveis. Os jogos iniciados deixam de aparecer nesta lista.</p>
+                {scheduledMatches.length === 0 ? (
+                  <p className="muted text-xs">Não existem jogos agendados.</p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {matches.map((match) => (
+                    {scheduledMatches.map((match) => (
                       <div key={match.id} className="flex min-w-0 gap-2">
                         <button type="button" onClick={() => selectMatch(match)}
                           className="min-w-0 flex-1 rounded-xl border border-[#263646] bg-[#0b131c] p-3 text-left transition hover:border-[#47637b]">
@@ -768,7 +794,7 @@ export default function LiveMatchManagementPage() {
                         <button
                           type="button"
                           className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-rose-900/70 bg-rose-950/30 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={`Remover jogo ${match.home_team} vs ${match.away_team}`}
+                          aria-label={"Remover jogo " + match.home_team + " vs " + match.away_team}
                           title="Remover jogo agendado"
                           disabled={deletingMatchId !== null}
                           onClick={() => void deleteScheduledMatch(match)}
@@ -780,11 +806,59 @@ export default function LiveMatchManagementPage() {
                   </div>
                 )}
               </section>
+
+              {liveMatches.length > 0 && (
+                <section className="panel grid gap-3 p-3 sm:p-4">
+                  <h2 className="text-sm font-semibold">Jogos em curso <span className="muted font-normal">({liveMatches.length})</span></h2>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {liveMatches.map((match) => (
+                      <button key={match.id} type="button" onClick={() => selectMatch(match)}
+                        className="rounded-xl border border-[#315a45] bg-[#0b1e16] p-3 text-left transition hover:border-[#49bd78]">
+                        <p className="text-[10px] text-[#85e9ac]">{match.competition}</p>
+                        <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                        <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
+                        <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Em curso · Abrir cronómetro</p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <section className="panel grid gap-3 p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold">Jogos terminados <span className="muted font-normal">({finishedMatches.length})</span></h2>
+                  <button type="button" onClick={() => void refreshMatches().catch((refreshError) => setError(getErrorMessage(refreshError)))}
+                    className="btn !px-2.5 !py-2 text-xs" disabled={loading}>
+                    <RefreshCw size={13} />Atualizar
+                  </button>
+                </div>
+                {finishedMatches.length === 0 ? (
+                  <p className="muted text-xs">Ainda não existem jogos terminados registados.</p>
+                ) : (
+                  <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {finishedMatches.map((match) => (
+                      <button key={match.id} type="button" onClick={() => selectMatch(match)}
+                        className="rounded-xl border border-[#315a45] bg-[#0b1e16] p-3 text-left transition hover:border-[#49bd78]">
+                        <p className="text-[10px] font-semibold text-[#85e9ac]">{match.competition}</p>
+                        <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                        <p className="muted mt-1 text-[10px]">{match.round_label ? match.round_label + " · " : ""}{formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
+                        <p className="muted mt-1 text-[10px]"><MapPin size={10} className="mr-1 inline" />{match.venue}</p>
+                        <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Terminado · Consultar tempos e relatório</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
             </>
           )}
 
           {activeMatch && (
             <section className="flex min-h-0 flex-1 flex-col gap-2">
+              <div className="flex shrink-0 justify-start">
+                <button type="button" onClick={returnToMatchList} className="btn !min-h-8 !px-2.5 !py-1.5 text-[10px]">
+                  <ArrowLeft size={12} />Voltar à lista de jogos
+                </button>
+              </div>
               <section className="panel grid shrink-0 gap-2 p-2 sm:p-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[#75e8a4]">{activeMatch.competition}</p>
