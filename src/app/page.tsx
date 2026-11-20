@@ -282,7 +282,6 @@ export default function HomePage() {
     const loadMatches = async () => {
       const { error: syncError } = await supabase.rpc("sync_finished_public_live_matches", { target_project: projectId });
       if (cancelled) return;
-      if (cancelled) return;
       setMatchesSyncError(syncError
         ? `${language === "pt" ? "Falha ao importar jogos terminados em Jogo ao vivo. Confirma que a migração SQL 0020 está aplicada no Supabase." : "Could not import completed live matches. Confirm that Supabase migration SQL 0020 has been applied."} ${syncError.message}`
         : "");
