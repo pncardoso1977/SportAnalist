@@ -72,6 +72,10 @@ export default function LiveMatchManagementPage() {
   const [matchDate, setMatchDate] = useState(INITIAL_FIXTURE.matchDate);
   const [kickoffTime, setKickoffTime] = useState(INITIAL_FIXTURE.kickoffTime);
   const [venue, setVenue] = useState(INITIAL_FIXTURE.venue);
+  const [rosterPlayers, setRosterPlayers] = useState<LivePlayer[]>([]);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+
+  const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
   const onCourtCount = stints.filter((stint) => stint.ended_second === null).length;
@@ -109,6 +113,34 @@ export default function LiveMatchManagementPage() {
 
   useEffect(() => {
     let cancelled = false;
+    async function loadRoster() {
+      if (!supabase) return;
+      setError("");
+      try {
+        const { data, error: rosterError } = await supabase.rpc("list_public_live_roster", {
+          p_competition: competition.trim(),
+        });
+        if (rosterError) throw rosterError;
+        if (cancelled) return;
+        const roster = Array.isArray(data) ? data as LivePlayer[] : [];
+        setRosterPlayers(roster);
+        // The Sub-17 roster has exactly twelve players; preselect that complete squad.
+        // Portela seniors has more options, so the operator chooses the twelve for each fixture.
+        setSelectedPlayerIds(roster.length === 12 ? roster.map((player) => player.id) : []);
+      } catch (rosterError) {
+        if (!cancelled) {
+          setRosterPlayers([]);
+          setSelectedPlayerIds([]);
+          setError(getErrorMessage(rosterError));
+        }
+      }
+    }
+    void loadRoster();
+    return () => { cancelled = true; };
+  }, [competition, supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
     async function initialise() {
       if (!supabase) {
         setError("A ligação à base de dados não está configurada.");
@@ -132,6 +164,10 @@ export default function LiveMatchManagementPage() {
   async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
+    if (selectedPlayerIds.length !== 12) {
+      setError("Seleciona exatamente 12 jogadores para este jogo.");
+      return;
+    }
     setSaving(true);
     setError("");
     setMessage("");
@@ -145,6 +181,7 @@ export default function LiveMatchManagementPage() {
         p_played_at: matchDate,
         p_kickoff_time: kickoffTime,
         p_venue: venue.trim(),
+        p_player_ids: selectedPlayerIds,
       });
       if (rpcError) throw rpcError;
       if (typeof data !== "string") throw new Error("A base de dados não devolveu o identificador do jogo.");
@@ -277,7 +314,25 @@ export default function LiveMatchManagementPage() {
                 <form onSubmit={(event) => void createMatch(event)} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="text-xs text-[#a8b8c7] sm:col-span-2">
                     Competição
-                    <input className="field mt-1" value={competition} onChange={(event) => setCompetition(event.target.value)} required maxLength={180} />
+                    <select
+                      className="field mt-1"
+                      value={competition}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setCompetition(value);
+                        if (value === "CD II DIV SENIORES MASCULINOS") {
+                          setAnalysedTeam("Portela");
+                          setOpponent("");
+                        } else {
+                          setAnalysedTeam("Associação Marista");
+                          setOpponent("Portela");
+                        }
+                      }}
+                      required
+                    >
+                      <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL</option>
+                      <option value="CD II DIV SENIORES MASCULINOS">CD II DIV SENIORES MASCULINOS</option>
+                    </select>
                   </label>
                   <label className="text-xs text-[#a8b8c7]">
                     Equipa analisada
@@ -305,9 +360,49 @@ export default function LiveMatchManagementPage() {
                     Local
                     <input className="field mt-1" value={venue} onChange={(event) => setVenue(event.target.value)} required maxLength={240} />
                   </label>
+                  <div className="grid gap-2 rounded-xl border border-[#263646] bg-[#0b131c] p-3 sm:col-span-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-white">Convocatória · selecionar 12 jogadores</p>
+                        <p className="muted text-[10px]">
+                          {isPortelaSenior ? "Plantel Portela · Seniores Masculinos" : "Plantel Associação Marista · Sub-17"}
+                        </p>
+                      </div>
+                      <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === 12 ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
+                        {selectedPlayerIds.length}/12 selecionados
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                      {rosterPlayers.map((player) => {
+                        const checked = selectedPlayerIds.includes(player.id);
+                        const atLimit = selectedPlayerIds.length >= 12 && !checked;
+                        return (
+                          <label key={player.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] ${checked ? "border-[#3b8b60] bg-[#10291c] text-white" : "border-[#263646] bg-[#101923] text-[#c1ccd6]"} ${atLimit ? "opacity-45" : ""}`}>
+                            <input
+                              type="checkbox"
+                              className="accent-emerald-500"
+                              checked={checked}
+                              disabled={atLimit || saving}
+                              onChange={(event) => setSelectedPlayerIds((current) =>
+                                event.target.checked
+                                  ? current.length < 12 ? [...current, player.id] : current
+                                  : current.filter((id) => id !== player.id)
+                              )}
+                            />
+                            <span className="min-w-0 truncate" title={player.full_name}>{player.display_name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {rosterPlayers.length === 0 ? (
+                      <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0009.</p>
+                    ) : (
+                      <p className="muted text-[10px]">Disponíveis: {rosterPlayers.length}. Só os 12 selecionados serão incluídos no jogo.</p>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
                     <p className="muted text-[10px]">A lista pública apresenta nomes e tempos de jogo; não inclui datas de nascimento nem fotografias.</p>
-                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving}>
+                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length !== 12 || rosterPlayers.length < 12}>
                       <Trophy size={15} />{saving ? "A criar jogo…" : "Criar jogo e abrir cronómetro"}
                     </button>
                   </div>
