@@ -189,6 +189,8 @@ export default function HomePage() {
   const [aiAnalyzedKit, setAiAnalyzedKit] = useState("Amarelo");
   const [aiOpponentKit, setAiOpponentKit] = useState("Azul");
   const [matches, setMatches] = useState<Match[]>([]);
+  const [matchesSyncError, setMatchesSyncError] = useState("");
+  const [matchesRefreshKey, setMatchesRefreshKey] = useState(0);
   const [importedLiveData, setImportedLiveData] = useState<ImportedLiveMatchData | null>(null);
   const [importedLiveLoading, setImportedLiveLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -280,9 +282,10 @@ export default function HomePage() {
     const loadMatches = async () => {
       const { error: syncError } = await supabase.rpc("sync_finished_public_live_matches", { target_project: projectId });
       if (cancelled) return;
-      if (syncError) {
-        setMessage(syncError.message);
-      }
+      if (cancelled) return;
+      setMatchesSyncError(syncError
+        ? `${language === "pt" ? "Falha ao importar jogos terminados em Jogo ao vivo. Confirma que a migração SQL 0020 está aplicada no Supabase." : "Could not import completed live matches. Confirm that Supabase migration SQL 0020 has been applied."} ${syncError.message}`
+        : "");
       const { data, error } = await supabase.from("matches")
         .select("*")
         .eq("project_id", projectId)
@@ -290,7 +293,7 @@ export default function HomePage() {
         .limit(100);
       if (cancelled) return;
       if (error) {
-        setMessage(error.message);
+        setMatchesSyncError(language === "pt" ? `Não foi possível carregar a lista de jogos: ${error.message}` : `Could not load match history: ${error.message}`);
         return;
       }
       setMatches((data ?? []) as Match[]);
@@ -315,7 +318,7 @@ export default function HomePage() {
       window.clearInterval(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [supabase, projectId]);
+  }, [supabase, projectId, matchesRefreshKey, language]);
 
   const refreshClock = useCallback(() => {
     const second = playerRef.current?.getCurrentTime?.();
@@ -857,10 +860,18 @@ export default function HomePage() {
           </>}
 
           {supabase && projectId && <section className="min-h-0 flex-1 border-t border-[#263646] pt-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.savedMatches}</h3>
-              <span className="rounded-full border border-[#263646] px-2 py-0.5 text-[10px]">{matches.length}</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setMatchesRefreshKey((current) => current + 1)}
+                  className="flex items-center gap-1 rounded border border-[#31475a] px-2 py-1 text-[10px] text-[#b8c7d3] hover:border-[#5f819e]"
+                  title={language === "pt" ? "Atualizar e importar jogos terminados" : "Refresh and import completed matches"}>
+                  <RefreshCw size={11} />{language === "pt" ? "Atualizar" : "Refresh"}
+                </button>
+                <span className="rounded-full border border-[#263646] px-2 py-0.5 text-[10px]">{matches.length}</span>
+              </div>
             </div>
+            {matchesSyncError && <p role="alert" className="mb-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] leading-relaxed text-amber-200">{matchesSyncError}</p>}
             {matches.length === 0 ? <p className="muted py-2 text-xs">{t.noMatches}</p> : <div className="scrollbar flex flex-col gap-1.5 overflow-y-auto">
               {matches.map((match) => {
                 const opposingTeam = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
