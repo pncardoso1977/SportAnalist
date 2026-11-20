@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Activity, ArrowDownToLine, CircleHelp, Clock3, Copy, FilePlus2,
-  Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Trash2, Video, X,
+  Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
@@ -746,6 +747,7 @@ export default function HomePage() {
             : <select aria-label={t.role} className="field !w-auto text-sm" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
                 <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
               </select>}
+          <Link href="/jogo-ao-vivo" className="btn !px-3 !py-2 text-xs"><Timer size={15} /><span className="hidden sm:inline">Jogo ao vivo</span><span className="sm:hidden">Ao vivo</span></Link>
           <button className="btn !px-3 !py-2" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}><Globe2 size={15} />{language.toUpperCase()}</button>
         </div>
       </header>
