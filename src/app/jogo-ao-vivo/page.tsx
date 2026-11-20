@@ -127,8 +127,8 @@ export default function LiveMatchManagementPage() {
   }, [supabase]);
 
   useEffect(() => {
-    const client = supabase;
-    if (!client || !projectId || !canEdit) return;
+    if (!supabase || !projectId || !canEdit) return;
+    const client = supabase as NonNullable<typeof supabase>;
     let cancelled = false;
     async function initialise() {
       setLoading(true);
