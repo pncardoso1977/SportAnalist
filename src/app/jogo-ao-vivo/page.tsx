@@ -79,11 +79,15 @@ export default function LiveMatchManagementPage() {
   const [loadingLowerRoster, setLoadingLowerRoster] = useState(false);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
 
-  const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
-  const isJuniores = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 19 FUTSAL";
-  const isJuvenis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 17 FUTSAL";
-  const isIniciados = competition.trim().toUpperCase() === "CD I DIVISÃO | SUB 15 FUTSAL";
-  const isInfantis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 13 FUTSAL";
+  const normalizedCompetition = competition.trim().toUpperCase();
+  const isPortelaSenior = normalizedCompetition === "CD II DIV SENIORES MASCULINOS";
+  const isJuniores = normalizedCompetition === "CD II DIVISÃO | SUB 19 FUTSAL";
+  const isJuvenis = normalizedCompetition === "CD II DIVISÃO | SUB 17 FUTSAL";
+  const isIniciados = normalizedCompetition === "CD I DIVISÃO | SUB 15 FUTSAL";
+  const isInfantis = normalizedCompetition === "CD II DIVISÃO | SUB 13 FUTSAL";
+  const isBenjamins = normalizedCompetition === "CD | SUB 11 FUTSAL"
+    || normalizedCompetition === "FOOTLOURES | FUTSAL | 2026 | SUB 11";
+  const isTraquinas = normalizedCompetition === "ENCONTROS MINI FUTSAL - TRAQUINAS";
   const lowerRosterCompetition = isPortelaSenior
     ? "CD II DIVISÃO | SUB 19 FUTSAL"
     : isJuniores
@@ -92,7 +96,11 @@ export default function LiveMatchManagementPage() {
         ? "CD I DIVISÃO | SUB 15 FUTSAL"
         : isIniciados
           ? "CD II DIVISÃO | SUB 13 FUTSAL"
-          : "";
+          : isInfantis
+            ? "CD | SUB 11 FUTSAL"
+            : isBenjamins
+              ? "ENCONTROS MINI FUTSAL - TRAQUINAS"
+              : "";
   const primaryRosterLabel = isPortelaSenior
     ? "Seniores Masculinos"
     : isJuniores
@@ -101,14 +109,22 @@ export default function LiveMatchManagementPage() {
         ? "Juvenis Sub-17"
         : isIniciados
           ? "Iniciados Sub-15"
-          : "Infantis Sub-13";
+          : isInfantis
+            ? "Infantis Sub-13"
+            : isBenjamins
+              ? "Benjamins Sub-11"
+              : "Traquinas";
   const lowerRosterLabel = isPortelaSenior
     ? "Juniores Sub-19"
     : isJuniores
       ? "Juvenis Sub-17"
       : isJuvenis
         ? "Iniciados Sub-15"
-        : "Infantis Sub-13";
+        : isIniciados
+          ? "Infantis Sub-13"
+          : isInfantis
+            ? "Benjamins Sub-11"
+            : "Traquinas";
   const visibleRosterCount = rosterPlayers.length + (showLowerRoster ? lowerRosterPlayers.length : 0);
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
@@ -440,6 +456,9 @@ export default function LiveMatchManagementPage() {
                       required
                     >
                       <option value="CD II DIVISÃO | SUB 13 FUTSAL">CD II DIVISÃO | SUB 13 FUTSAL · Infantis</option>
+                      <option value="CD | SUB 11 FUTSAL">CD | SUB 11 FUTSAL · Benjamins</option>
+                      <option value="FOOTLOURES | FUTSAL | 2026 | SUB 11">FOOTLOURES | FUTSAL | 2026 | SUB 11 · Benjamins</option>
+                      <option value="ENCONTROS MINI FUTSAL - TRAQUINAS">ENCONTROS MINI FUTSAL - TRAQUINAS · Traquinas</option>
                       <option value="CD I DIVISÃO | SUB 15 FUTSAL">CD I DIVISÃO | SUB 15 FUTSAL · Iniciados</option>
                       <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL · Juvenis</option>
                       <option value="CD II DIVISÃO | SUB 19 FUTSAL">CD II DIVISÃO | SUB 19 FUTSAL · Juniores</option>
