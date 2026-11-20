@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, MapPin,
   Pause, Play, RefreshCw, Share2, ShieldAlert, Timer, Trophy, Users, X,
@@ -186,7 +186,7 @@ export default function LiveMatchManagementPage() {
     return () => { cancelled = true; };
   }, [supabase, projectId, canEdit]);
 
-  async function createMatch(event: React.FormEvent<HTMLFormElement>) {
+  async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || !projectId || !userId || !canEdit) return;
     if (!competition.trim() || !analysedTeam.trim() || !opponent.trim() || !matchDate || !kickoffTime || !venue.trim()) {
@@ -452,7 +452,7 @@ export default function LiveMatchManagementPage() {
                 return (
                   <div key={player.id} className={`flex min-w-0 items-center gap-2 rounded-xl border p-2.5 ${activeStint ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${activeStint ? "bg-[#35d07f] text-[#062012]" : "bg-[#1b2a38] text-[#9eb0c0]"}`}>
-                      {player.sort_order / 10}
+                      <Users size={15} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="break-words text-xs font-semibold leading-snug">{player.full_name}</p>
