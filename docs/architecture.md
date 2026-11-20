@@ -84,3 +84,8 @@ Firebase App Check is initialised with the reCAPTCHA Enterprise provider. See [a
 Live match tracking is implemented separately from the authenticated analysis schema by `0006_public_live_match_access.sql`. The public `/jogo-ao-vivo` page does not call Supabase Auth or check project roles. It calls security-definer RPCs (`list_public_live_matches`, `create_public_live_match`, `get_public_live_match`, `start_public_live_clock`, `pause_public_live_clock`, `set_public_live_player`, `finish_public_live_clock`) that are granted to `anon` and `authenticated`. The underlying `public_live_*` tables have RLS enabled and no direct table grants; the RPCs return only match metadata, player names, clock and player stint intervals.
 
 This design intentionally gives every visitor read/write access to every match in the public live area. Visitors can create matches and modify clocks/substitutions, but the RPCs cannot access or modify the separate project analysis tables. The five-player limit is enforced while holding a row lock on the match clock. Player names are seeded globally; dates of birth, photographs, FPF IDs and user/project identifiers are not included in the public roster projection.
+
+
+### Player display labels
+
+Migration `0007_live_player_display_names.sql` adds canonical short names to the public roster and a `public_live_match_players` join table for match-specific labels. Creating a public match snapshots the default display label for every active player. The public RPC `set_public_live_player_name` changes only that fixture's label; the full registry name remains unchanged. `get_public_live_match` returns the display label for both operator and public spectator UIs. Mobile match operation uses a compact grid and viewport-height layout.
