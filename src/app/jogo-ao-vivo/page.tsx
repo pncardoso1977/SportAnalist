@@ -91,18 +91,6 @@ export default function LiveMatchManagementPage() {
     setShareToken(null);
   }, []);
 
-  const loadMatches = useCallback(async (targetProject: string) => {
-    if (!supabase) return;
-    const { data, error: queryError } = await supabase.from("matches")
-      .select("id, competition, round_label, home_team, away_team, analyzed_team, played_at, kickoff_time, venue, live_status")
-      .eq("project_id", targetProject)
-      .not("competition", "is", null)
-      .order("played_at", { ascending: false })
-      .limit(30);
-    if (queryError) throw queryError;
-    setMatches((data ?? []) as LiveMatch[]);
-  }, [supabase]);
-
   const loadMatchData = useCallback(async (match: LiveMatch, createShare = true) => {
     if (!supabase) return;
     setLoading(true);
