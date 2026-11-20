@@ -264,7 +264,7 @@ export default function LiveMatchManagementPage() {
       ];
     }
     return [];
-  }, [clock?.elapsed_seconds, clock?.first_half_seconds, players, reportStage, stints]);
+  }, [clock, players, reportStage, stints]);
   const publicUrl = activeMatch && typeof window !== "undefined"
     ? `${window.location.origin}/jogo-ao-vivo/${activeMatch.id}`
     : "";
@@ -290,29 +290,34 @@ export default function LiveMatchManagementPage() {
       setPlayers(result.players ?? []);
       setStints(result.stints ?? []);
       setEditingNames(false);
-      setReportStage(result.clock.status === "finished"
+      const nextReportStage = result.clock.status === "finished"
         ? "finished"
-        : result.clock.first_half_seconds !== null ? "halftime" : null);
+        : result.clock.first_half_seconds !== null ? "halftime" : null;
+      setReportStage(nextReportStage);
+      if (nextReportStage === "halftime" && result.clock.first_half_seconds !== null) {
+        const firstHalf = buildReportSection("1ª Parte", result.players ?? [], result.stints ?? [], 0, result.clock.first_half_seconds);
+        setHalfTimeImage(renderReportPng(result.match, [firstHalf]));
+        setFullReportImage(null);
+      } else if (nextReportStage === "finished") {
+        const finalSeconds = result.clock.elapsed_seconds;
+        const firstHalfSeconds = result.clock.first_half_seconds ?? finalSeconds;
+        const sections = [
+          buildReportSection("1ª Parte", result.players ?? [], result.stints ?? [], 0, firstHalfSeconds),
+          buildReportSection("2ª Parte", result.players ?? [], result.stints ?? [], firstHalfSeconds, finalSeconds),
+          buildReportSection("Tempo total do jogo", result.players ?? [], result.stints ?? [], 0, finalSeconds),
+        ];
+        setHalfTimeImage(renderReportPng(result.match, [sections[0]]));
+        setFullReportImage(renderReportPng(result.match, sections));
+      } else {
+        setHalfTimeImage(null);
+        setFullReportImage(null);
+      }
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
   }, [supabase]);
-
-  useEffect(() => {
-    if (!activeMatch || reportSections.length === 0 || reportStage === null) return;
-    try {
-      if (reportStage === "halftime") {
-        setHalfTimeImage(renderReportPng(activeMatch, reportSections));
-      } else {
-        setHalfTimeImage(renderReportPng(activeMatch, [reportSections[0]]));
-        setFullReportImage(renderReportPng(activeMatch, reportSections));
-      }
-    } catch (imageError) {
-      setError(getErrorMessage(imageError));
-    }
-  }, [activeMatch, reportSections, reportStage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -454,7 +459,7 @@ export default function LiveMatchManagementPage() {
           ? "Cronómetro retomado. A 2ª parte está em curso."
           : "Cronómetro iniciado.");
       } else if (isHalftime) {
-        setReportStage("halftime");
+        await loadMatchData(activeMatch.id);
         setMessage("Intervalo registado. Os tempos da 1ª parte estão disponíveis no relatório.");
       } else {
         setMessage("Cronómetro em pausa.");
