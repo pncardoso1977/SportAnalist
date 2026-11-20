@@ -358,7 +358,6 @@ set search_path = public, pg_temp
 as $$
   select jsonb_build_object(
     'match', jsonb_build_object(
-      'id', m.id,
       'competition', m.competition,
       'round_label', m.round_label,
       'home_team', m.home_team,
@@ -377,7 +376,6 @@ as $$
     'players', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', p.id,
-        'fpf_player_id', p.fpf_player_id,
         'full_name', p.full_name,
         'sort_order', p.sort_order,
         'active', exists (
