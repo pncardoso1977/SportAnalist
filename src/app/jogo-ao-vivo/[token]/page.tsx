@@ -19,8 +19,10 @@ type PublicSquadPlayer = {
   sort_order: number;
 };
 
+type PublicMatchDetails = Omit<LiveMatch, "id">;
+
 type PublicLiveMatch = {
-  match: LiveMatch;
+  match: PublicMatchDetails;
   clock: LiveClock;
   players: PublicSquadPlayer[];
   stints: PlayerStint[];
