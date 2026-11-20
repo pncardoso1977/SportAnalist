@@ -1,7 +1,15 @@
 -- Allow signed-in users to delete public live fixtures in any clock state.
 -- Anonymous visitors retain public match creation and timekeeping, but cannot delete.
 
-revoke all on function public.delete_public_scheduled_match(uuid) from public, anon, authenticated;
+-- Older databases may not have migration 0014 (and therefore may not
+-- contain the scheduled-only deletion function). Revoke it only when present.
+do $
+begin
+  if to_regprocedure('public.delete_public_scheduled_match(uuid)') is not null then
+    execute 'revoke all on function public.delete_public_scheduled_match(uuid) from public, anon, authenticated';
+  end if;
+end;
+$;
 
 create or replace function public.delete_public_live_match(p_match_id uuid)
 returns boolean
