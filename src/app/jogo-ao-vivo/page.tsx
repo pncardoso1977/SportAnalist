@@ -126,7 +126,6 @@ export default function LiveMatchManagementPage() {
   }, [supabase]);
 
   useEffect(() => {
-    setNow(Date.now());
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
