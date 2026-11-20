@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, CheckCircle2, Clock3, Copy, ExternalLink, MapPin, Pause,
+  ArrowLeft, CheckCircle2, Clock3, Copy, Download, ExternalLink, MapPin, Pause,
   Pencil, Play, RefreshCw, Share2, Timer, Trophy, Trash2, X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
@@ -12,6 +12,7 @@ import {
   formatDuration,
   liveElapsedSeconds,
   playerCourtSeconds,
+  playerCourtSecondsInRange,
   type LiveClock,
   type LiveMatch,
   type PlayerStint,
@@ -61,6 +62,109 @@ function getMaxCalledPlayers(competition: string): number {
   return 12;
 }
 
+type ReportRow = { playerId: string; displayName: string; seconds: number };
+type ReportSection = { title: string; durationSeconds: number; rows: ReportRow[] };
+type ReportStage = "halftime" | "finished" | null;
+
+function buildReportSection(
+  title: string,
+  players: LivePlayer[],
+  stints: PlayerStint[],
+  periodStart: number,
+  periodEnd: number,
+): ReportSection {
+  const rows = players.map((player) => ({
+    playerId: player.id,
+    displayName: player.display_name || player.full_name,
+    seconds: playerCourtSecondsInRange(stints, player.id, periodStart, periodEnd),
+  })).sort((a, b) => b.seconds - a.seconds || a.displayName.localeCompare(b.displayName, "pt-PT"));
+  return { title, durationSeconds: Math.max(0, periodEnd - periodStart), rows };
+}
+
+function renderReportPng(match: LiveMatch, sections: ReportSection[]): string {
+  const canvas = document.createElement("canvas");
+  const width = 1200;
+  const rowHeight = 44;
+  const height = 190 + sections.reduce((sum, section) => sum + 104 + section.rows.length * rowHeight, 0)
+    + Math.max(0, sections.length - 1) * 28;
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Não foi possível gerar a imagem do relatório.");
+
+  context.fillStyle = "#f4f7f9";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#102033";
+  context.fillRect(0, 0, width, 150);
+  context.fillStyle = "#8ee8ae";
+  context.font = "bold 22px Arial";
+  context.fillText("SPORTANALIST · RELATÓRIO DE TEMPOS", 48, 48);
+  context.fillStyle = "#ffffff";
+  context.font = "bold 30px Arial";
+  context.fillText(`${match.home_team} vs ${match.away_team}`, 48, 91);
+  context.font = "18px Arial";
+  context.fillStyle = "#d5e1e9";
+  context.fillText(`${match.competition} · ${formatMatchDate(match.played_at)} · ${match.kickoff_time?.slice(0, 5) ?? ""}`, 48, 125);
+
+  let y = 174;
+  sections.forEach((section, sectionIndex) => {
+    context.fillStyle = "#102033";
+    context.font = "bold 26px Arial";
+    context.fillText(section.title, 48, y);
+    context.textAlign = "right";
+    context.font = "bold 18px Arial";
+    context.fillText(`Duração: ${formatDuration(section.durationSeconds)}`, width - 48, y);
+    context.textAlign = "left";
+    y += 26;
+    context.fillStyle = "#1d8050";
+    context.fillRect(48, y, width - 96, 42);
+    context.fillStyle = "#ffffff";
+    context.font = "bold 16px Arial";
+    context.fillText("POS.", 68, y + 27);
+    context.fillText("JOGADOR", 160, y + 27);
+    context.textAlign = "right";
+    context.fillText("TEMPO EM CAMPO", width - 68, y + 27);
+    context.textAlign = "left";
+    y += 42;
+
+    section.rows.forEach((row, rowIndex) => {
+      context.fillStyle = rowIndex % 2 === 0 ? "#ffffff" : "#e8eef2";
+      context.fillRect(48, y, width - 96, rowHeight);
+      context.fillStyle = "#23384a";
+      context.font = "17px Arial";
+      context.fillText(String(rowIndex + 1), 68, y + 28);
+      const name = row.displayName.length > 55 ? `${row.displayName.slice(0, 52)}…` : row.displayName;
+      context.fillText(name, 160, y + 28);
+      context.textAlign = "right";
+      context.font = "bold 17px Arial";
+      context.fillText(formatDuration(row.seconds), width - 68, y + 28);
+      context.textAlign = "left";
+      y += rowHeight;
+    });
+    if (sectionIndex < sections.length - 1) y += 28;
+  });
+  return canvas.toDataURL("image/png");
+}
+
+function downloadReportCsv(match: LiveMatch, sections: ReportSection[]) {
+  const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const lines = ["Parte;Posição;Jogador;Tempo;Segundos"];
+  sections.forEach((section) => section.rows.forEach((row, index) => {
+    lines.push([
+      quote(section.title), String(index + 1), quote(row.displayName),
+      quote(formatDuration(row.seconds)), String(row.seconds),
+    ].join(";"));
+  }));
+  const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stem = `${match.played_at}-${match.home_team}-${match.away_team}`.replace(/[^a-z0-9_-]+/gi, "-");
+  anchor.href = url;
+  anchor.download = `relatorio-tempos-${stem}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function LiveMatchManagementPage() {
   const supabase = useMemo(() => getSupabase(), []);
   const [matches, setMatches] = useState<LiveMatch[]>([]);
@@ -74,6 +178,10 @@ export default function LiveMatchManagementPage() {
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
   const [editingNames, setEditingNames] = useState(false);
+  const [pendingClockAction, setPendingClockAction] = useState<"start" | "pause" | "finish" | null>(null);
+  const [reportStage, setReportStage] = useState<ReportStage>(null);
+  const [halfTimeImage, setHalfTimeImage] = useState<string | null>(null);
+  const [fullReportImage, setFullReportImage] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [competition, setCompetition] = useState(INITIAL_FIXTURE.competition);
@@ -141,6 +249,22 @@ export default function LiveMatchManagementPage() {
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
   const onCourtCount = stints.filter((stint) => stint.ended_second === null).length;
+  const reportSections = useMemo<ReportSection[]>(() => {
+    if (!clock || !reportStage) return [];
+    if (reportStage === "halftime" && clock.first_half_seconds !== null) {
+      return [buildReportSection("1ª Parte", players, stints, 0, clock.first_half_seconds)];
+    }
+    if (reportStage === "finished") {
+      const finalSeconds = clock.elapsed_seconds;
+      const firstHalfSeconds = clock.first_half_seconds ?? finalSeconds;
+      return [
+        buildReportSection("1ª Parte", players, stints, 0, firstHalfSeconds),
+        buildReportSection("2ª Parte", players, stints, firstHalfSeconds, finalSeconds),
+        buildReportSection("Tempo total do jogo", players, stints, 0, finalSeconds),
+      ];
+    }
+    return [];
+  }, [clock?.elapsed_seconds, clock?.first_half_seconds, players, reportStage, stints]);
   const publicUrl = activeMatch && typeof window !== "undefined"
     ? `${window.location.origin}/jogo-ao-vivo/${activeMatch.id}`
     : "";
@@ -166,12 +290,29 @@ export default function LiveMatchManagementPage() {
       setPlayers(result.players ?? []);
       setStints(result.stints ?? []);
       setEditingNames(false);
+      setReportStage(result.clock.status === "finished"
+        ? "finished"
+        : result.clock.first_half_seconds !== null ? "halftime" : null);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
   }, [supabase]);
+
+  useEffect(() => {
+    if (!activeMatch || reportSections.length === 0 || reportStage === null) return;
+    try {
+      if (reportStage === "halftime") {
+        setHalfTimeImage(renderReportPng(activeMatch, reportSections));
+      } else {
+        setHalfTimeImage(renderReportPng(activeMatch, [reportSections[0]]));
+        setFullReportImage(renderReportPng(activeMatch, reportSections));
+      }
+    } catch (imageError) {
+      setError(getErrorMessage(imageError));
+    }
+  }, [activeMatch, reportSections, reportStage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +416,8 @@ export default function LiveMatchManagementPage() {
       });
       if (rpcError) throw rpcError;
       if (typeof data !== "string") throw new Error("A base de dados não devolveu o identificador do jogo.");
+      setHalfTimeImage(null);
+      setFullReportImage(null);
       await refreshMatches();
       await loadMatchData(data);
       setMessage("Jogo criado. O cronómetro e a gestão do plantel estão disponíveis sem iniciar sessão.");
@@ -285,7 +428,7 @@ export default function LiveMatchManagementPage() {
     }
   }
 
-  async function controlClock(action: "start" | "pause" | "finish") {
+  async function controlClock(action: "start" | "pause" | "finish", isHalftime = false) {
     if (!activeMatch || !supabase || saving) return;
     setSaving(true);
     setError("");
@@ -294,16 +437,27 @@ export default function LiveMatchManagementPage() {
       const rpcName = action === "start"
         ? "start_public_live_clock"
         : action === "pause" ? "pause_public_live_clock" : "finish_public_live_clock";
-      const { data, error: rpcError } = await supabase.rpc(rpcName, { p_match_id: activeMatch.id });
+      const rpcArgs = action === "pause"
+        ? { p_match_id: activeMatch.id, p_is_halftime: isHalftime }
+        : { p_match_id: activeMatch.id };
+      const { data, error: rpcError } = await supabase.rpc(rpcName, rpcArgs);
       if (rpcError) throw rpcError;
       setClock(data as LiveClock);
       if (action === "finish") {
         await loadMatchData(activeMatch.id);
         await refreshMatches();
-        setMessage("Jogo terminado. Todos os tempos em campo foram fechados.");
+        setMessage("Jogo terminado. Foram calculados os tempos da 1ª parte, 2ª parte e total.");
       } else if (action === "start") {
         setActiveMatch({ ...activeMatch, live_status: "live" });
         await refreshMatches();
+        setMessage(clock?.first_half_seconds !== null && clock?.first_half_seconds !== undefined
+          ? "Cronómetro retomado. A 2ª parte está em curso."
+          : "Cronómetro iniciado.");
+      } else if (isHalftime) {
+        setReportStage("halftime");
+        setMessage("Intervalo registado. Os tempos da 1ª parte estão disponíveis no relatório.");
+      } else {
+        setMessage("Cronómetro em pausa.");
       }
     } catch (clockError) {
       setError(getErrorMessage(clockError));
@@ -367,6 +521,8 @@ export default function LiveMatchManagementPage() {
   function selectMatch(match: LiveMatch) {
     setMessage("");
     setError("");
+    setHalfTimeImage(null);
+    setFullReportImage(null);
     void loadMatchData(match.id);
   }
 
@@ -419,7 +575,7 @@ export default function LiveMatchManagementPage() {
   }
 
   return (
-    <main className={`mx-auto flex w-full max-w-5xl flex-col gap-2 px-2 py-2 sm:px-5 sm:py-3 ${activeMatch ? "h-[100svh] overflow-hidden" : "min-h-screen"}`}>
+    <main className={`mx-auto flex w-full max-w-5xl flex-col gap-2 px-2 py-2 sm:px-5 sm:py-3 ${activeMatch ? reportStage ? "min-h-[100svh] overflow-y-auto" : "h-[100svh] overflow-hidden" : "min-h-screen"}`}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#35d07f1c] text-[#35d07f]">
@@ -639,17 +795,15 @@ export default function LiveMatchManagementPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {clock?.status === "running" ? (
-                      <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving} onClick={() => void controlClock("pause")}>
+                      <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving} onClick={() => setPendingClockAction("pause")}>
                         <Pause size={13} />Pausar
                       </button>
                     ) : (
-                      <button type="button" className="btn btn-primary !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving || clock?.status === "finished"} onClick={() => void controlClock("start")}>
+                      <button type="button" className="btn btn-primary !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving || clock?.status === "finished"} onClick={() => setPendingClockAction("start")}>
                         <Play size={13} />{clock?.status === "paused" ? "Retomar" : "Iniciar"}
                       </button>
                     )}
-                    <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px] text-rose-200" disabled={saving || clock?.status === "finished"} onClick={() => {
-                      if (window.confirm("Terminar o jogo e fechar todos os tempos em campo?")) void controlClock("finish");
-                    }}>
+                    <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px] text-rose-200" disabled={saving || clock?.status === "finished"} onClick={() => setPendingClockAction("finish")}>
                       <CheckCircle2 size={13} />Terminar
                     </button>
                     <span className="col-span-2 text-center text-[9px] text-[#a7c6b3]">{onCourtCount}/5 em campo · {clock?.status === "running" ? "A contar" : clock?.status === "finished" ? "Terminado" : clock?.status === "paused" ? "Em pausa" : "Pronto"}</span>
@@ -723,6 +877,76 @@ export default function LiveMatchManagementPage() {
                 </div>
               </section>
 
+
+              {reportStage && reportSections.length > 0 && (
+                <section className="panel grid gap-3 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-sm font-semibold">{reportStage === "halftime" ? "Relatório do intervalo" : "Relatório final do jogo"}</h2>
+                      <p className="muted text-[10px]">Tempos individuais ordenados do maior para o menor · valores em minutos e segundos</p>
+                    </div>
+                    <button type="button" className="btn !min-h-8 !px-2 !py-1 text-[10px]" onClick={() => downloadReportCsv(activeMatch, reportSections)}>
+                      <Download size={12} />Exportar CSV
+                    </button>
+                  </div>
+
+                  {reportStage === "finished" && clock?.first_half_seconds === null && (
+                    <p className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-2 text-[10px] text-amber-200">
+                      O intervalo não foi registado. Para não inventar uma divisão, todo o tempo jogado foi atribuído à 1ª parte e a 2ª parte apresenta zero.
+                    </p>
+                  )}
+
+                  <div className="grid gap-3">
+                    {reportSections.map((section) => (
+                      <div key={section.title} className="overflow-x-auto rounded-lg border border-[#263646]">
+                        <div className="flex items-center justify-between gap-2 bg-[#142330] px-3 py-2">
+                          <h3 className="text-xs font-semibold text-white">{section.title}</h3>
+                          <span className="font-mono text-[10px] text-[#8ee8ae]">{formatDuration(section.durationSeconds)}</span>
+                        </div>
+                        <table className="w-full min-w-[280px] text-left text-[10px]">
+                          <thead className="bg-[#1d8050] text-white">
+                            <tr><th className="px-2 py-2">#</th><th className="px-2 py-2">Jogador</th><th className="px-2 py-2 text-right">Tempo em campo</th></tr>
+                          </thead>
+                          <tbody>
+                            {section.rows.map((row, index) => (
+                              <tr key={row.playerId} className={index % 2 === 0 ? "bg-[#101923]" : "bg-[#182533]"}>
+                                <td className="px-2 py-2 text-[#93a8b8]">{index + 1}</td>
+                                <td className="px-2 py-2 font-medium text-white">{row.displayName}</td>
+                                <td className="px-2 py-2 text-right font-mono text-[#b7f0cc]">{formatDuration(row.seconds)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+
+                  {halfTimeImage && (
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-xs font-semibold">Imagem · 1ª Parte</h3>
+                        <a className="btn !min-h-8 !px-2 !py-1 text-[10px]" href={halfTimeImage} download={`relatorio-1a-parte-${activeMatch.played_at}.png`}>
+                          <Download size={12} />PNG
+                        </a>
+                      </div>
+                      <img src={halfTimeImage} alt="Tabela de tempos de jogo da primeira parte" className="h-auto w-full rounded-lg border border-[#263646]" />
+                    </div>
+                  )}
+
+                  {reportStage === "finished" && fullReportImage && (
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-xs font-semibold">Imagem · relatório completo</h3>
+                        <a className="btn !min-h-8 !px-2 !py-1 text-[10px]" href={fullReportImage} download={`relatorio-completo-${activeMatch.played_at}.png`}>
+                          <Download size={12} />PNG
+                        </a>
+                      </div>
+                      <img src={fullReportImage} alt="Relatório completo com as tabelas da primeira parte, segunda parte e tempo total" className="h-auto w-full rounded-lg border border-[#263646]" />
+                    </div>
+                  )}
+                </section>
+              )}
+
               <div className="flex shrink-0 items-center gap-1.5 border-t border-[#263646] pt-1.5">
                 <Share2 size={12} className="shrink-0 text-[#79e9aa]" />
                 <input className="field min-w-0 flex-1 !py-1 text-[9px]" value={publicUrl} readOnly aria-label="Link público do jogo" />
@@ -732,6 +956,63 @@ export default function LiveMatchManagementPage() {
             </section>
           )}
         </>
+      )}
+
+
+      {pendingClockAction && activeMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-3 py-6" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="clock-confirm-title" className="w-full max-w-md rounded-2xl border border-[#36516a] bg-[#101a25] p-4 shadow-2xl">
+            {pendingClockAction === "start" ? (
+              <>
+                <h2 id="clock-confirm-title" className="text-base font-bold text-white">{clock?.status === "paused" ? "Retomar cronómetro?" : "Confirmar início do jogo?"}</h2>
+                <p className="mt-2 text-xs text-[#b8c7d3]">
+                  {clock?.status === "paused"
+                    ? "O tempo de jogo vai continuar a contar a partir do ponto em que ficou pausado."
+                    : "Ao confirmar, começa a contagem do tempo de jogo e ficam disponíveis os registos de entradas e saídas dos jogadores."}
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" className="btn !px-3 !py-2 text-xs" disabled={saving} onClick={() => setPendingClockAction(null)}>Cancelar</button>
+                  <button type="button" className="btn btn-primary !px-3 !py-2 text-xs" disabled={saving} onClick={() => { setPendingClockAction(null); void controlClock("start"); }}>
+                    <Play size={13} />{saving ? "A processar…" : "Confirmar"}
+                  </button>
+                </div>
+              </>
+            ) : pendingClockAction === "pause" ? (
+              <>
+                <h2 id="clock-confirm-title" className="text-base font-bold text-white">Esta pausa é para intervalo?</h2>
+                <p className="mt-2 text-xs text-[#b8c7d3]">
+                  {clock?.first_half_seconds !== null
+                    ? "O intervalo já foi registado. Só é possível efetuar uma pausa normal."
+                    : "Ao confirmar o intervalo, fica guardado o fim da 1ª parte e é criado o relatório dos tempos de cada jogador."}
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button type="button" className="btn !px-3 !py-2 text-xs" disabled={saving} onClick={() => { setPendingClockAction(null); void controlClock("pause", false); }}>
+                    {saving ? "A processar…" : "Não, pausa normal"}
+                  </button>
+                  {clock?.first_half_seconds === null && (
+                    <button type="button" className="btn btn-primary !px-3 !py-2 text-xs" disabled={saving} onClick={() => { setPendingClockAction(null); void controlClock("pause", true); }}>
+                      <CheckCircle2 size={13} />Sim, registar intervalo
+                    </button>
+                  )}
+                </div>
+                <button type="button" className="mt-3 w-full text-center text-xs text-[#9badbb]" disabled={saving} onClick={() => setPendingClockAction(null)}>Cancelar</button>
+              </>
+            ) : (
+              <>
+                <h2 id="clock-confirm-title" className="text-base font-bold text-white">Confirmar fim de jogo?</h2>
+                <p className="mt-2 text-xs text-[#b8c7d3]">
+                  Esta ação fecha todos os tempos ainda em aberto e calcula os relatórios da 1ª parte, 2ª parte e tempo total. Não será possível continuar o cronómetro.
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" className="btn !px-3 !py-2 text-xs" disabled={saving} onClick={() => setPendingClockAction(null)}>Cancelar</button>
+                  <button type="button" className="btn !border-rose-800 !bg-rose-950 !px-3 !py-2 text-xs text-rose-100" disabled={saving} onClick={() => { setPendingClockAction(null); void controlClock("finish"); }}>
+                    <CheckCircle2 size={13} />{saving ? "A terminar…" : "Terminar jogo"}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
       )}
 
       {loading && <p className="muted text-center text-xs">A carregar dados…</p>}
