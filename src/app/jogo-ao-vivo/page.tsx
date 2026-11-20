@@ -81,7 +81,6 @@ export default function LiveMatchManagementPage() {
   const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
   const isJuniores = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 19 FUTSAL";
   const isJuvenis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 17 FUTSAL";
-  const isIniciados = competition.trim().toUpperCase() === "CD I DIVISÃO | SUB 15 FUTSAL";
   const lowerRosterCompetition = isPortelaSenior
     ? "CD II DIVISÃO | SUB 19 FUTSAL"
     : isJuniores
@@ -150,8 +149,8 @@ export default function LiveMatchManagementPage() {
         if (cancelled) return;
         const roster = Array.isArray(data) ? data as LivePlayer[] : [];
         setRosterPlayers(roster);
-        // The Juvenis roster has exactly twelve players; preselect that complete squad.
-        // Senior and Junior squads have more options, so choose twelve for each fixture.
+        // Only the Juvenis roster has exactly twelve players; preselect that complete squad.
+        // Other squads have more options, so choose twelve for each fixture.
         setSelectedPlayerIds(roster.length === 12 ? roster.map((player) => player.id) : []);
       } catch (rosterError) {
         if (!cancelled) {
