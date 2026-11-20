@@ -168,6 +168,8 @@ function downloadReportCsv(match: LiveMatch, sections: ReportSection[]) {
 export default function LiveMatchManagementPage() {
   const supabase = useMemo(() => getSupabase(), []);
   const [matches, setMatches] = useState<LiveMatch[]>([]);
+  const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [activeMatch, setActiveMatch] = useState<LiveMatch | null>(null);
   const [clock, setClock] = useState<LiveClock | null>(null);
   const [players, setPlayers] = useState<LivePlayer[]>([]);
@@ -197,6 +199,29 @@ export default function LiveMatchManagementPage() {
   const [showLowerRoster, setShowLowerRoster] = useState(false);
   const [loadingLowerRoster, setLoadingLowerRoster] = useState(false);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true);
+      return;
+    }
+    let cancelled = false;
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      setAuthenticatedUserId(session?.user?.id ?? null);
+      setAuthReady(true);
+    });
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (cancelled) return;
+      if (sessionError) setError(getErrorMessage(sessionError));
+      setAuthenticatedUserId(data.session?.user?.id ?? null);
+      setAuthReady(true);
+    });
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   const normalizedCompetition = competition.trim().toUpperCase();
   const isPortelaSenior = normalizedCompetition === "CD II DIV SENIORES MASCULINOS";
@@ -564,11 +589,11 @@ export default function LiveMatchManagementPage() {
     void refreshMatches().catch((refreshError) => setError(getErrorMessage(refreshError)));
   }
 
-  async function deleteScheduledMatch(match: LiveMatch) {
-    if (!supabase || deletingMatchId) return;
+  async function deletePublicLiveMatch(match: LiveMatch) {
+    if (!supabase || !authenticatedUserId || deletingMatchId) return;
     const fixtureName = `${match.home_team} vs ${match.away_team}`;
     const confirmed = window.confirm(
-      `Eliminar definitivamente o jogo agendado ${fixtureName}? Esta ação só é permitida antes de iniciar o cronómetro.`
+      `Eliminar definitivamente o registo de ${fixtureName}? A ação remove o jogo e os tempos dos jogadores, independentemente de estar agendado, em curso ou terminado. Uma análise com vídeo já associado é preservada no histórico principal.`
     );
     if (!confirmed) return;
 
@@ -576,13 +601,24 @@ export default function LiveMatchManagementPage() {
     setError("");
     setMessage("");
     try {
-      const { data, error: rpcError } = await supabase.rpc("delete_public_scheduled_match", {
+      const { data, error: rpcError } = await supabase.rpc("delete_public_live_match", {
         p_match_id: match.id,
       });
       if (rpcError) throw rpcError;
       if (data !== true) throw new Error("Não foi possível confirmar a remoção do jogo.");
       setMatches((current) => current.filter((item) => item.id !== match.id));
-      setMessage("Jogo agendado removido.");
+      if (activeMatch?.id === match.id) {
+        setActiveMatch(null);
+        setClock(null);
+        setPlayers([]);
+        setStints([]);
+        setEditingNames(false);
+        setPendingClockAction(null);
+        setReportStage(null);
+        setHalfTimeImage(null);
+        setFullReportImage(null);
+      }
+      setMessage("Jogo ao vivo eliminado.");
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
       await refreshMatches();
@@ -626,6 +662,13 @@ export default function LiveMatchManagementPage() {
         </div>
         <Link href="/" className="btn !px-2 !py-1.5 text-[10px]"><ArrowLeft size={14} />SportAnalist</Link>
       </header>
+      {authReady && (
+        <p className="muted shrink-0 text-[10px]">
+          {authenticatedUserId
+            ? "Sessão iniciada · podes eliminar jogos em qualquer estado."
+            : <>Para eliminar jogos, <Link href="/" className="text-[#8fc8ff] underline">inicia sessão no SportAnalist</Link>.</>}
+        </p>
+      )}
 
       {!supabase ? (
         <section className="panel p-4 text-sm text-amber-300">
@@ -798,16 +841,18 @@ export default function LiveMatchManagementPage() {
                           <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
                           <p className="mt-2 text-[10px] text-[#79e9aa]">Agendado · Abrir cronómetro</p>
                         </button>
-                        <button
-                          type="button"
-                          className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-rose-900/70 bg-rose-950/30 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={"Remover jogo " + match.home_team + " vs " + match.away_team}
-                          title="Remover jogo agendado"
-                          disabled={deletingMatchId !== null}
-                          onClick={() => void deleteScheduledMatch(match)}
-                        >
-                          {deletingMatchId === match.id ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                        </button>
+                        {authenticatedUserId && (
+                          <button
+                            type="button"
+                            className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-rose-900/70 bg-rose-950/30 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={"Eliminar jogo " + match.home_team + " vs " + match.away_team}
+                            title="Eliminar jogo"
+                            disabled={deletingMatchId !== null}
+                            onClick={() => void deletePublicLiveMatch(match)}
+                          >
+                            {deletingMatchId === match.id ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -819,13 +864,22 @@ export default function LiveMatchManagementPage() {
                   <h2 className="text-sm font-semibold">Jogos em curso <span className="muted font-normal">({liveMatches.length})</span></h2>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {liveMatches.map((match) => (
-                      <button key={match.id} type="button" onClick={() => selectMatch(match)}
-                        className="rounded-xl border border-[#315a45] bg-[#0b1e16] p-3 text-left transition hover:border-[#49bd78]">
-                        <p className="text-[10px] text-[#85e9ac]">{match.competition}</p>
-                        <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
-                        <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
-                        <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Em curso · Abrir cronómetro</p>
-                      </button>
+                      <div key={match.id} className="flex min-w-0 gap-2 rounded-xl border border-[#315a45] bg-[#0b1e16] p-3">
+                        <button type="button" onClick={() => selectMatch(match)} className="min-w-0 flex-1 text-left">
+                          <p className="text-[10px] text-[#85e9ac]">{match.competition}</p>
+                          <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                          <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
+                          <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Em curso · Abrir cronómetro</p>
+                        </button>
+                        {authenticatedUserId && (
+                          <button type="button" aria-label={"Eliminar jogo " + match.home_team + " vs " + match.away_team}
+                            title="Eliminar jogo" disabled={deletingMatchId !== null}
+                            onClick={() => void deletePublicLiveMatch(match)}
+                            className="flex w-10 shrink-0 items-center justify-center self-center rounded-lg border border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 disabled:opacity-50">
+                            {deletingMatchId === match.id ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </section>
@@ -847,14 +901,23 @@ export default function LiveMatchManagementPage() {
                 ) : (
                   <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
                     {finishedMatches.map((match) => (
-                      <button key={match.id} type="button" onClick={() => selectMatch(match)}
-                        className="rounded-xl border border-[#315a45] bg-[#0b1e16] p-3 text-left transition hover:border-[#49bd78]">
-                        <p className="text-[10px] font-semibold text-[#85e9ac]">{match.competition}</p>
-                        <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
-                        <p className="muted mt-1 text-[10px]">{match.round_label ? match.round_label + " · " : ""}{formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
-                        <p className="muted mt-1 text-[10px]"><MapPin size={10} className="mr-1 inline" />{match.venue}</p>
-                        <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Terminado · Consultar tempos e relatório</p>
-                      </button>
+                      <div key={match.id} className="flex min-w-0 gap-2 rounded-xl border border-[#315a45] bg-[#0b1e16] p-3">
+                        <button type="button" onClick={() => selectMatch(match)} className="min-w-0 flex-1 text-left">
+                          <p className="text-[10px] font-semibold text-[#85e9ac]">{match.competition}</p>
+                          <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                          <p className="muted mt-1 text-[10px]">{match.round_label ? match.round_label + " · " : ""}{formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
+                          <p className="muted mt-1 text-[10px]"><MapPin size={10} className="mr-1 inline" />{match.venue}</p>
+                          <p className="mt-2 text-[10px] font-semibold text-[#8ee8ae]">Terminado · Consultar tempos e relatório</p>
+                        </button>
+                        {authenticatedUserId && (
+                          <button type="button" aria-label={"Eliminar jogo " + match.home_team + " vs " + match.away_team}
+                            title="Eliminar jogo" disabled={deletingMatchId !== null}
+                            onClick={() => void deletePublicLiveMatch(match)}
+                            className="flex w-10 shrink-0 items-center justify-center self-center rounded-lg border border-rose-900/70 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 disabled:opacity-50">
+                            {deletingMatchId === match.id ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
