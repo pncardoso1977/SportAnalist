@@ -52,7 +52,7 @@ Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do
 - Persistência de jogos/eventos e atualizações em tempo real na mesma partida quando Supabase está configurado.
 - Partilha pública individual por jogo, com token aleatório, página de consulta de vídeo/cronologia e possibilidade de revogação pelo editor.
 - Sugestões de golos a partir do URL YouTube (incluindo vídeos não listados) através de Firebase AI Logic/Gemini; requer consentimento e confirmação do analista.
-- Área pública e responsiva de jogo ao vivo em `/jogo-ao-vivo`, sem autenticação ou perfis, com criação de jogos, cronómetro, substituições e cálculo automático do tempo em campo; página pública de consulta em `/jogo-ao-vivo/[id]`. Qualquer visitante pode criar jogos e operar os jogos públicos desta área.
+- Área pública e responsiva de jogo ao vivo em `/jogo-ao-vivo`, sem autenticação ou perfis, com criação de jogos, cronómetro, substituições, nomes curtos editáveis por jogo e cálculo automático do tempo em campo; página pública de consulta em `/jogo-ao-vivo/[id]`. A vista operacional é compacta e desenhada para caber no ecrã do telemóvel.
 
 ## Estado e pré-requisitos de produção
 O código e a migração estão no repositório; a publicação online ainda não foi ativada. É necessário criar o projeto Supabase, aplicar a migração e importar o repositório na Vercel seguindo [docs/deployment.md](docs/deployment.md). Os planos gratuitos têm quotas e não equivalem a serviço sem limites.
