@@ -126,13 +126,15 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
                 const onCourt = data.stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                 const seconds = playerCourtSeconds(data.stints, player.id, elapsedSeconds);
                 return (
-                  <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1.5 ${onCourt ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
-                    <p className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</p>
-                    <div className="mt-1 flex items-center justify-between gap-1">
-                      <span className="font-mono text-[9px] text-[#a8b8c7]">{formatDuration(seconds)}</span>
-                      <span className={`rounded px-1 py-0.5 text-[8px] ${onCourt ? "bg-[#173d2a] text-[#8af0ad]" : "bg-[#1a2733] text-[#9eb0c0]"}`}>
-                        {onCourt ? "Campo" : "Banco"}
+                  <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1.5 text-white ${onCourt ? "border-[#49bd78] bg-[#155c36]" : "border-[#e5a04b] bg-[#935012]"}`}>
+                    <div className="flex min-w-0 items-center justify-between gap-1">
+                      <p className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</p>
+                      <span className="shrink-0 rounded bg-black/15 px-1 py-0.5 text-[8px] font-bold text-white/90">
+                        {onCourt ? "CAMPO" : "BANCO"}
                       </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 font-mono text-[9px] text-white/90">
+                      <Clock3 size={10} />{formatDuration(seconds)}
                     </div>
                   </div>
                 );
