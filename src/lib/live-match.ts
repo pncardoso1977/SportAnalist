@@ -34,6 +34,7 @@ export type LiveMatch = {
 
 export type LiveClock = {
   elapsed_seconds: number;
+  first_half_seconds: number | null;
   started_at: string | null;
   status: "scheduled" | "running" | "paused" | "finished";
 };
@@ -60,9 +61,23 @@ export function playerCourtSeconds(
   playerId: string,
   elapsedSeconds: number,
 ): number {
+  return playerCourtSecondsInRange(stints, playerId, 0, elapsedSeconds);
+}
+
+export function playerCourtSecondsInRange(
+  stints: readonly PlayerStint[],
+  playerId: string,
+  periodStart: number,
+  periodEnd: number,
+): number {
+  if (periodEnd <= periodStart) return 0;
   return stints
     .filter((stint) => stint.player_id === playerId)
-    .reduce((total, stint) => total + Math.max(0, (stint.ended_second ?? elapsedSeconds) - stint.started_second), 0);
+    .reduce((total, stint) => {
+      const started = Math.max(stint.started_second, periodStart);
+      const ended = Math.min(stint.ended_second ?? periodEnd, periodEnd);
+      return total + Math.max(0, ended - started);
+    }, 0);
 }
 
 export function formatDuration(totalSeconds: number): string {
