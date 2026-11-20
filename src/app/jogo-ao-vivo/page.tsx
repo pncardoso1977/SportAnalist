@@ -356,7 +356,7 @@ export default function LiveMatchManagementPage() {
           )}
 
           {activeMatch && (
-            <section className="grid min-h-0 flex-1 gap-2">
+            <section className="flex min-h-0 flex-1 flex-col gap-2">
               <section className="panel grid shrink-0 gap-2 p-2 sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
