@@ -92,7 +92,7 @@ export default function LiveMatchManagementPage() {
     setShareToken(null);
   }, []);
 
-  const loadMatchData = useCallback(async (match: LiveMatch, createShare = true) => {
+  const loadMatchData = useCallback(async (match: LiveMatch, createShare = false) => {
     if (!supabase) return;
     setLoading(true);
     setError("");
@@ -198,13 +198,9 @@ export default function LiveMatchManagementPage() {
       if (insertError || !data) throw insertError ?? new Error("Não foi possível criar o jogo.");
 
       const newMatch = data as LiveMatch;
-      const { data: token, error: shareError } = await supabase.rpc("create_match_share", { target_match: newMatch.id });
-      if (shareError) throw shareError;
-
       setMatches((current) => [newMatch, ...current.filter((match) => match.id !== newMatch.id)]);
       await loadMatchData(newMatch, false);
-      setShareToken(typeof token === "string" ? token : null);
-      setMessage("Jogo criado. A ficha pública já está disponível para partilhar.");
+      setMessage("Jogo criado. Cria o link público quando quiseres partilhar a ficha.");
     } catch (createError) {
       setError(getErrorMessage(createError));
     } finally {
@@ -259,6 +255,40 @@ export default function LiveMatchManagementPage() {
       setError(getErrorMessage(toggleError));
     } finally {
       setBusyPlayerId(null);
+    }
+  }
+
+  async function createPublicLink() {
+    if (!supabase || !activeMatch || !canEdit || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const { data, error: rpcError } = await supabase.rpc("create_match_share", { target_match: activeMatch.id });
+      if (rpcError) throw rpcError;
+      if (typeof data !== "string") throw new Error("A base de dados não devolveu o link público.");
+      setShareToken(data);
+      setMessage("Link público criado. Só fica acessível a quem tiver o endereço.");
+    } catch (shareError) {
+      setError(getErrorMessage(shareError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function revokePublicLink() {
+    if (!supabase || !activeMatch || !canEdit || saving) return;
+    if (!window.confirm("Desativar o link público deste jogo e da respetiva análise?")) return;
+    setSaving(true);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("revoke_match_share", { target_match: activeMatch.id });
+      if (rpcError) throw rpcError;
+      setShareToken(null);
+      setMessage("Link público desativado.");
+    } catch (shareError) {
+      setError(getErrorMessage(shareError));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -463,17 +493,22 @@ export default function LiveMatchManagementPage() {
             <p className="muted text-[10px]">O máximo de cinco jogadores em campo é validado também pela base de dados. A pausa do cronómetro interrompe a contagem sem retirar os jogadores.</p>
           </section>
 
-          {publicUrl && (
-            <section className="panel grid gap-2 p-3 sm:p-4">
-              <div className="flex items-center gap-2"><Share2 size={17} className="text-[#79e9aa]" /><h2 className="text-sm font-semibold">Página pública do jogo</h2></div>
-              <p className="muted text-[10px]">Qualquer pessoa com o link pode consultar o cronómetro e os tempos individuais. A edição continua reservada aos analistas.</p>
+          <section className="panel grid gap-2 p-3 sm:p-4">
+            <div className="flex items-center gap-2"><Share2 size={17} className="text-[#79e9aa]" /><h2 className="text-sm font-semibold">Página pública do jogo</h2></div>
+            <p className="muted text-[10px]">O link é opcional. Quando ativo, qualquer pessoa com o endereço pode consultar o cronómetro e os tempos individuais; não pode editar. Desativar o link também desativa a página pública da análise de vídeo deste jogo.</p>
+            {publicUrl ? (
               <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
                 <input className="field min-w-0 flex-1 text-xs" value={publicUrl} readOnly aria-label="Link público do jogo" />
-                <button type="button" className="btn btn-primary !py-2 text-xs" onClick={() => void copyPublicLink()}><Copy size={13} />Copiar link</button>
+                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={saving} onClick={() => void copyPublicLink()}><Copy size={13} />Copiar link</button>
                 <a href={publicUrl} target="_blank" rel="noreferrer" className="btn !py-2 text-xs"><ExternalLink size={13} />Abrir</a>
+                <button type="button" className="btn !py-2 text-xs text-rose-200" disabled={saving} onClick={() => void revokePublicLink()}><X size={13} />Desativar</button>
               </div>
-            </section>
-          )}
+            ) : (
+              <button type="button" className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving} onClick={() => void createPublicLink()}>
+                <Share2 size={15} />{saving ? "A preparar link…" : "Criar link público"}
+              </button>
+            )}
+          </section>
         </section>
       )}
 
