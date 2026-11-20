@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { Activity, CalendarDays, Clock3, MapPin, ShieldAlert, Timer, Trophy, Users } from "lucide-react";
+import { CalendarDays, Clock3, MapPin, ShieldAlert, Timer, Users } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import {
   formatDuration,
