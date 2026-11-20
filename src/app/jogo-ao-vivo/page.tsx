@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type F
 import Link from "next/link";
 import {
   ArrowLeft, CheckCircle2, Clock3, Copy, ExternalLink, MapPin, Pause,
-  Pencil, Play, RefreshCw, Share2, Timer, Trophy, X,
+  Pencil, Play, RefreshCw, Share2, Timer, Trophy, Trash2, X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { getClockSnapshot, getServerClockSnapshot, subscribeToClock } from "@/lib/clock-store";
@@ -61,6 +61,7 @@ export default function LiveMatchManagementPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
   const [editingNames, setEditingNames] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -334,6 +335,33 @@ export default function LiveMatchManagementPage() {
     void loadMatchData(match.id);
   }
 
+  async function deleteScheduledMatch(match: LiveMatch) {
+    if (!supabase || deletingMatchId) return;
+    const fixtureName = `${match.home_team} vs ${match.away_team}`;
+    const confirmed = window.confirm(
+      `Eliminar definitivamente o jogo agendado ${fixtureName}? Esta ação só é permitida antes de iniciar o cronómetro.`
+    );
+    if (!confirmed) return;
+
+    setDeletingMatchId(match.id);
+    setError("");
+    setMessage("");
+    try {
+      const { data, error: rpcError } = await supabase.rpc("delete_public_scheduled_match", {
+        p_match_id: match.id,
+      });
+      if (rpcError) throw rpcError;
+      if (data !== true) throw new Error("Não foi possível confirmar a remoção do jogo.");
+      setMatches((current) => current.filter((item) => item.id !== match.id));
+      setMessage("Jogo agendado removido.");
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+      await refreshMatches();
+    } finally {
+      setDeletingMatchId(null);
+    }
+  }
+
   function renderRosterOption(player: LivePlayer) {
     const checked = selectedPlayerIds.includes(player.id);
     const atLimit = selectedPlayerIds.length >= 12 && !checked;
@@ -529,13 +557,25 @@ export default function LiveMatchManagementPage() {
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {matches.map((match) => (
-                      <button key={match.id} type="button" onClick={() => selectMatch(match)}
-                        className="rounded-xl border border-[#263646] bg-[#0b131c] p-3 text-left transition hover:border-[#47637b]">
-                        <p className="text-[10px] text-[#85e9ac]">{match.competition}</p>
-                        <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
-                        <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
-                        <p className="mt-2 text-[10px] text-[#79e9aa]">{match.live_status === "live" ? "Em jogo" : match.live_status === "finished" ? "Terminado" : "Agendado"} · Abrir cronómetro</p>
-                      </button>
+                      <div key={match.id} className="flex min-w-0 gap-2">
+                        <button type="button" onClick={() => selectMatch(match)}
+                          className="min-w-0 flex-1 rounded-xl border border-[#263646] bg-[#0b131c] p-3 text-left transition hover:border-[#47637b]">
+                          <p className="text-[10px] text-[#85e9ac]">{match.competition}</p>
+                          <p className="mt-1 text-sm font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                          <p className="muted mt-1 text-[10px]">{match.round_label} · {formatMatchDate(match.played_at)} · {match.kickoff_time?.slice(0, 5) ?? ""}</p>
+                          <p className="mt-2 text-[10px] text-[#79e9aa]">Agendado · Abrir cronómetro</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-rose-900/70 bg-rose-950/30 text-rose-300 transition hover:bg-rose-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Remover jogo ${match.home_team} vs ${match.away_team}`}
+                          title="Remover jogo agendado"
+                          disabled={deletingMatchId !== null}
+                          onClick={() => void deleteScheduledMatch(match)}
+                        >
+                          {deletingMatchId === match.id ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
