@@ -16,6 +16,7 @@ import {
 type PublicSquadPlayer = {
   id: string;
   full_name: string;
+  display_name: string;
   sort_order: number;
 };
 
@@ -69,16 +70,16 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
   }, [supabase, token]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-4 px-3 py-4 sm:px-5 sm:py-6">
-      <header className="flex items-center gap-3 border-b border-[#263646] pb-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#35d07f1c] text-[#35d07f]">
-          <Timer size={24} />
+    <main className="mx-auto flex h-[100svh] w-full max-w-4xl flex-col gap-2 overflow-hidden px-2 py-2 sm:px-5 sm:py-3">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[#263646] pb-2">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#35d07f1c] text-[#35d07f]">
+          <Timer size={19} />
         </div>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold">SportAnalist · Jogo ao vivo</h1>
-          <p className="muted text-[10px]">Acompanhamento público dos tempos de utilização</p>
+          <h1 className="text-sm font-bold">SportAnalist · Jogo ao vivo</h1>
+          <p className="muted text-[9px]">Tempos de utilização do plantel</p>
         </div>
-        <span className="ml-auto rounded-full border border-[#365846] bg-[#12241b] px-2 py-1 text-[9px] text-[#9aeab6]">Público</span>
+        <span className="ml-auto rounded-full border border-[#365846] bg-[#12241b] px-2 py-1 text-[8px] text-[#9aeab6]">Público</span>
       </header>
 
       {loading ? (
@@ -91,51 +92,48 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
         </section>
       ) : (
         <>
-          <section className="panel grid gap-3 p-4">
+          <section className="panel grid shrink-0 gap-2 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[#75e8a4]">{data.match.competition}</p>
-                <h2 className="mt-1 text-xl font-bold leading-tight">{data.match.home_team} <span className="muted font-normal">vs</span> {data.match.away_team}</h2>
+                <h2 className="mt-1 text-base font-bold leading-tight">{data.match.home_team} <span className="muted font-normal">vs</span> {data.match.away_team}</h2>
                 <p className="muted mt-1 text-xs">{data.match.round_label}</p>
               </div>
               <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${data.clock.status === "running" ? "bg-[#112820] text-[#79e9aa]" : data.clock.status === "finished" ? "bg-[#1b2a38] text-[#aebdca]" : "bg-[#322719] text-[#f1c58d]"}`}>
                 {data.clock.status === "running" ? "Em jogo" : data.clock.status === "finished" ? "Terminado" : data.clock.status === "paused" ? "Em pausa" : "Agendado"}
               </span>
             </div>
-            <div className="grid gap-2 text-xs sm:grid-cols-2">
+            <div className="grid gap-1 text-[10px] sm:grid-cols-2">
               <p className="muted flex items-center gap-2"><CalendarDays size={14} />{formatMatchDate(data.match.played_at)} · {data.match.kickoff_time?.slice(0, 5)}</p>
               <p className="muted flex items-center gap-2"><MapPin size={14} />{data.match.venue}</p>
             </div>
-            <div className="rounded-2xl border border-[#315a45] bg-[#0b1e16] p-4 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-[#8ee8ae]">Tempo decorrido</p>
-              <p className="mt-1 font-mono text-5xl font-bold tabular-nums tracking-tight text-white sm:text-6xl">{formatDuration(elapsedSeconds)}</p>
-              <p className="mt-2 text-[10px] text-[#a7c6b3]">{activePlayers} jogadores em campo</p>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-[#315a45] bg-[#0b1e16] px-3 py-2">
+              <div>
+                <p className="text-[9px] font-semibold uppercase tracking-[.12em] text-[#8ee8ae]">Tempo decorrido</p>
+                <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">{formatDuration(elapsedSeconds)}</p>
+              </div>
+              <p className="text-[9px] text-[#a7c6b3]">{activePlayers}/5 em campo</p>
             </div>
           </section>
 
-          <section className="panel grid gap-3 p-3 sm:p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">Tempo de jogo por jogador</h2>
-                <p className="muted mt-0.5 text-[10px]">Atualização automática a cada 10 segundos</p>
-              </div>
-              <span className="muted inline-flex items-center gap-1 text-[10px]"><Users size={13} />{data.players.length} jogadores</span>
+          <section className="panel grid min-h-0 flex-1 content-start gap-1.5 p-2">
+            <div className="flex shrink-0 items-center justify-between gap-2">
+              <h2 className="text-xs font-semibold">Tempo por jogador</h2>
+              <span className="muted inline-flex items-center gap-1 text-[9px]"><Users size={11} />{data.players.length} jogadores · atualização automática</span>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
               {data.players.map((player) => {
                 const onCourt = data.stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                 const seconds = playerCourtSeconds(data.stints, player.id, elapsedSeconds);
                 return (
-                  <div key={player.id} className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 ${onCourt ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
-                    <div className="min-w-0 flex-1">
-                      <p className="break-words text-xs font-semibold leading-snug">{player.full_name}</p>
-                      <p className="muted mt-1 flex items-center gap-1 font-mono text-[11px]">
-                        <Clock3 size={12} />{formatDuration(seconds)}
-                      </p>
+                  <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1.5 ${onCourt ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
+                    <p className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</p>
+                    <div className="mt-1 flex items-center justify-between gap-1">
+                      <span className="font-mono text-[9px] text-[#a8b8c7]">{formatDuration(seconds)}</span>
+                      <span className={`rounded px-1 py-0.5 text-[8px] ${onCourt ? "bg-[#173d2a] text-[#8af0ad]" : "bg-[#1a2733] text-[#9eb0c0]"}`}>
+                        {onCourt ? "Campo" : "Banco"}
+                      </span>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${onCourt ? "bg-[#173d2a] text-[#8af0ad]" : "bg-[#1a2733] text-[#9eb0c0]"}`}>
-                      {onCourt ? "Em campo" : "No banco"}
-                    </span>
                   </div>
                 );
               })}
@@ -144,7 +142,7 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
         </>
       )}
 
-      <footer className="muted mt-auto border-t border-[#263646] pt-3 text-center text-[10px]">
+      <footer className="hidden">
         SportAnalist · Página pública de jogo · Dados atualizados automaticamente
       </footer>
     </main>
