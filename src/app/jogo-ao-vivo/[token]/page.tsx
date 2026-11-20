@@ -36,7 +36,7 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
   const [data, setData] = useState<PublicLiveMatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const elapsedSeconds = liveElapsedSeconds(data?.clock ?? null, now);
   const activePlayers = data?.stints.filter((stint) => stint.ended_second === null).length ?? 0;
 
