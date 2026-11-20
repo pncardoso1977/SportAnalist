@@ -19,7 +19,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador, configure as variáveis Supabase e aplique, por ordem, as migrações `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, `0003_team_event_association.sql`, `0004_public_match_sharing.sql` e `0005_live_player_time_tracking.sql`.
+Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador da análise técnico-tática, configure as variáveis Supabase e aplique as migrações `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql`. Para a área pública de jogo ao vivo sem autenticação, aplique também `0006_public_live_match_access.sql`.
 
 ## Variáveis de ambiente
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -38,7 +38,7 @@ As variáveis Firebase são configuração pública da Web App; não colocar cha
 - `viewer`: apenas leitura
 
 ## Publicação
-Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, `0003_team_event_association.sql`, `0004_public_match_sharing.sql` e `0005_live_player_time_tracking.sql`, e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md) e [docs/ai-goal-detection.md](docs/ai-goal-detection.md).
+Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql` e `0006_public_live_match_access.sql`, e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md) e [docs/ai-goal-detection.md](docs/ai-goal-detection.md).
 
 ## Funcionalidades implementadas
 - Player YouTube com leitura do segundo atual e links diretos para cada evento.
@@ -52,7 +52,7 @@ Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do
 - Persistência de jogos/eventos e atualizações em tempo real na mesma partida quando Supabase está configurado.
 - Partilha pública individual por jogo, com token aleatório, página de consulta de vídeo/cronologia e possibilidade de revogação pelo editor.
 - Sugestões de golos a partir do URL YouTube (incluindo vídeos não listados) através de Firebase AI Logic/Gemini; requer consentimento e confirmação do analista.
-- Área responsiva de jogo ao vivo em `/jogo-ao-vivo`, com cronómetro, substituições e cálculo automático do tempo em campo por jogador; página pública de consulta por token em `/jogo-ao-vivo/[token]`.
+- Área pública e responsiva de jogo ao vivo em `/jogo-ao-vivo`, sem autenticação ou perfis, com criação de jogos, cronómetro, substituições e cálculo automático do tempo em campo; página pública de consulta em `/jogo-ao-vivo/[id]`. Qualquer visitante pode criar jogos e operar os jogos públicos desta área.
 
 ## Estado e pré-requisitos de produção
 O código e a migração estão no repositório; a publicação online ainda não foi ativada. É necessário criar o projeto Supabase, aplicar a migração e importar o repositório na Vercel seguindo [docs/deployment.md](docs/deployment.md). Os planos gratuitos têm quotas e não equivalem a serviço sem limites.
