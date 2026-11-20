@@ -127,7 +127,8 @@ export default function LiveMatchManagementPage() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!supabase || !projectId || !canEdit) return;
+    const client = supabase;
+    if (!client || !projectId || !canEdit) return;
     let cancelled = false;
     async function initialise() {
       setLoading(true);
@@ -138,17 +139,17 @@ export default function LiveMatchManagementPage() {
           ...player,
           active: true,
         }));
-        const { error: seedError } = await supabase.from("squad_players")
+        const { error: seedError } = await client.from("squad_players")
           .upsert(playerRows, { onConflict: "project_id,fpf_player_id" });
         if (seedError) throw seedError;
 
         const [playersResult, matchesResult] = await Promise.all([
-          supabase.from("squad_players")
+          client.from("squad_players")
             .select("id, fpf_player_id, full_name, sort_order")
             .eq("project_id", projectId)
             .eq("active", true)
             .order("sort_order"),
-          supabase.from("matches")
+          client.from("matches")
             .select("id, competition, round_label, home_team, away_team, analyzed_team, played_at, kickoff_time, venue, live_status")
             .eq("project_id", projectId)
             .not("competition", "is", null)
