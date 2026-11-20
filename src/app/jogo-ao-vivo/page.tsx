@@ -51,7 +51,7 @@ export default function LiveMatchManagementPage() {
   const [clock, setClock] = useState<LiveClock | null>(null);
   const [stints, setStints] = useState<PlayerStint[]>([]);
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
@@ -126,6 +126,7 @@ export default function LiveMatchManagementPage() {
   }, [supabase]);
 
   useEffect(() => {
+    setNow(Date.now());
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
