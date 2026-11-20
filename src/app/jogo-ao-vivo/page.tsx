@@ -648,16 +648,16 @@ export default function LiveMatchManagementPage() {
                     const cardDisabled = saving || busyPlayerId !== null || clock?.status === "finished" || disablingEntry;
                     return editingNames ? (
                       <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1 ${activeStint ? "border-[#49bd78] bg-[#155c36]" : "border-[#e5a04b] bg-[#935012]"}`}>
-                        <input
+                        <textarea
                           aria-label={`Nome curto de ${player.full_name}`}
-                          className="w-full min-w-0 truncate border-0 bg-transparent p-0 text-[10px] font-semibold leading-4 text-white outline-none placeholder:text-white/60 focus:ring-0"
+                          className="w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-[10px] font-semibold leading-tight text-white outline-none placeholder:text-white/60 focus:ring-0"
                           value={player.display_name}
                           maxLength={40}
+                          rows={2}
                           onChange={(event) => setPlayers((current) => current.map((item) =>
                             item.id === player.id ? { ...item, display_name: event.target.value } : item
                           ))}
                           onBlur={() => void savePlayerDisplayName(player)}
-                          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
                         />
                         <div className="mt-1 flex items-center justify-between gap-1">
                           <span className="flex min-w-0 items-center gap-0.5 font-mono text-[9px] text-white/90">
@@ -676,14 +676,16 @@ export default function LiveMatchManagementPage() {
                         aria-label={`${player.display_name}, ${activeStint ? "em campo" : "no banco"}, ${formatDuration(totalSeconds)}. ${activeStint ? "Retirar do campo" : "Colocar em campo"}`}
                         onClick={() => void togglePlayer(player, activeStint)}
                       >
-                        <span className="flex min-w-0 items-center justify-between gap-1">
-                          <span className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</span>
+                        <span className="block whitespace-normal break-words text-[10px] font-semibold leading-tight" title={player.full_name}>
+                          {player.display_name}
+                        </span>
+                        <span className="mt-1 flex min-w-0 items-center justify-between gap-1">
+                          <span className="flex min-w-0 items-center gap-0.5 font-mono text-[9px] text-white/90">
+                            <Clock3 size={10} />{formatDuration(totalSeconds)}
+                          </span>
                           <span className="shrink-0 rounded bg-black/15 px-1 py-0.5 text-[8px] font-bold text-white/90">
                             {busyPlayerId === player.id ? "…" : activeStint ? "CAMPO" : "BANCO"}
                           </span>
-                        </span>
-                        <span className="mt-1 flex items-center gap-0.5 font-mono text-[9px] text-white/90">
-                          <Clock3 size={10} />{formatDuration(totalSeconds)}
                         </span>
                       </button>
                     );
