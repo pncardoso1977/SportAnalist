@@ -30,6 +30,7 @@ export type LiveMatch = {
   kickoff_time: string | null;
   venue: string | null;
   live_status: "scheduled" | "live" | "finished";
+  clock_status?: "scheduled" | "running" | "paused" | "finished" | null;
 };
 
 export type LiveClock = {
