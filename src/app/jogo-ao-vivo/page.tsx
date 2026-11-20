@@ -15,7 +15,6 @@ import {
   type LiveClock,
   type LiveMatch,
   type PlayerStint,
-  type SquadPlayer,
 } from "@/lib/live-match";
 
 const INITIAL_FIXTURE = {
@@ -28,7 +27,13 @@ const INITIAL_FIXTURE = {
   venue: "Pavilhão Externato Marista Lisboa",
 };
 
-type LivePlayer = SquadPlayer & { active: boolean; display_name: string };
+type LivePlayer = {
+  id: string;
+  full_name: string;
+  display_name: string;
+  sort_order: number;
+  active: boolean;
+};
 type PublicMatchData = {
   match: LiveMatch;
   clock: LiveClock;
@@ -213,11 +218,6 @@ export default function LiveMatchManagementPage() {
       await loadMatchData(activeMatch.id);
       return;
     }
-    if (displayName === player.full_name) {
-      // Keep the user's explicit short form even when it is different from
-      // the player's registry name.
-    }
-    setBusyPlayerId(player.id);
     setError("");
     try {
       const { error: rpcError } = await supabase.rpc("set_public_live_player_name", {
@@ -230,8 +230,6 @@ export default function LiveMatchManagementPage() {
     } catch (saveError) {
       setError(getErrorMessage(saveError));
       await loadMatchData(activeMatch.id);
-    } finally {
-      setBusyPlayerId(null);
     }
   }
 
