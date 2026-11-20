@@ -320,6 +320,9 @@ export default function LiveMatchManagementPage() {
                       onChange={(event) => {
                         const value = event.target.value;
                         setCompetition(value);
+                        // Clear the previous competition's roster immediately while the new one loads.
+                        setRosterPlayers([]);
+                        setSelectedPlayerIds([]);
                         if (value === "CD II DIV SENIORES MASCULINOS") {
                           setAnalysedTeam("Portela");
                           setOpponent("");
