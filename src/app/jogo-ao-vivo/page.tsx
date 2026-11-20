@@ -68,6 +68,7 @@ export default function LiveMatchManagementPage() {
   const [roundLabel, setRoundLabel] = useState(INITIAL_FIXTURE.roundLabel);
   const analysedTeam = "AMPortela";
   const [opponent, setOpponent] = useState(INITIAL_FIXTURE.opponent);
+  const [isHome, setIsHome] = useState(true);
   const [matchDate, setMatchDate] = useState(INITIAL_FIXTURE.matchDate);
   const [kickoffTime, setKickoffTime] = useState(INITIAL_FIXTURE.kickoffTime);
   const [venue, setVenue] = useState(INITIAL_FIXTURE.venue);
@@ -175,13 +176,14 @@ export default function LiveMatchManagementPage() {
       const { data, error: rpcError } = await supabase.rpc("create_public_live_match", {
         p_competition: competition.trim(),
         p_round_label: roundLabel.trim(),
-        p_home_team: analysedTeam.trim(),
-        p_away_team: opponent.trim(),
+        p_amportela: analysedTeam.trim(),
+        p_opponent: opponent.trim(),
         p_analyzed_team: analysedTeam.trim(),
         p_played_at: matchDate,
         p_kickoff_time: kickoffTime,
         p_venue: venue.trim(),
         p_player_ids: selectedPlayerIds,
+        p_is_home: isHome,
       });
       if (rpcError) throw rpcError;
       if (typeof data !== "string") throw new Error("A base de dados não devolveu o identificador do jogo.");
@@ -339,6 +341,26 @@ export default function LiveMatchManagementPage() {
                     Adversário
                     <input className="field mt-1" value={opponent} onChange={(event) => setOpponent(event.target.value)} required maxLength={100} />
                   </label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#315b47] bg-[#10251a] px-3 py-2.5 text-xs text-white">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-emerald-500"
+                      checked={isHome}
+                      onChange={(event) => setIsHome(event.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-semibold">AMPortela joga em casa</span>
+                      <span className="muted mt-0.5 block text-[10px]">
+                        {isHome
+                          ? "AMPortela será identificada como equipa da casa."
+                          : "AMPortela será identificada como equipa visitante."}
+                      </span>
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-[#263646] bg-[#101923] px-3 py-2 text-[10px] sm:col-span-2">
+                    <span className="muted">Identificação:</span>
+                    <strong className="text-white">{isHome ? "AMPortela" : (opponent.trim() || "Adversário")} vs {isHome ? (opponent.trim() || "Adversário") : "AMPortela"}</strong>
+                  </div>
                   <label className="text-xs text-[#a8b8c7]">
                     Jornada
                     <input className="field mt-1" value={roundLabel} onChange={(event) => setRoundLabel(event.target.value)} maxLength={80} />
