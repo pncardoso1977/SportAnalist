@@ -12,9 +12,16 @@ import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
 import { analyzeYouTubeGoals, isFirebaseAIConfigured, type DetectedGoal } from "@/lib/firebase-ai";
 import { calculateGoalScores, formatGoalScore } from "@/lib/goal-score";
+import { formatDuration, playerCourtSecondsInRange, type PlayerStint } from "@/lib/live-match";
 
 type Language = "pt" | "en";
 type AiGoalSuggestion = DetectedGoal & { id: string; confirmed: boolean };
+type ImportedLivePlayer = { id: string; full_name: string; display_name: string; sort_order: number; active: boolean };
+type ImportedLiveMatchData = {
+  clock: { elapsed_seconds: number; first_half_seconds: number | null; started_at: string | null; status: "scheduled" | "running" | "paused" | "finished" };
+  players: ImportedLivePlayer[];
+  stints: PlayerStint[];
+};
 type YouTubePlayer = {
   getCurrentTime: () => number;
   destroy: () => void;
@@ -182,6 +189,8 @@ export default function HomePage() {
   const [aiAnalyzedKit, setAiAnalyzedKit] = useState("Amarelo");
   const [aiOpponentKit, setAiOpponentKit] = useState("Azul");
   const [matches, setMatches] = useState<Match[]>([]);
+  const [importedLiveData, setImportedLiveData] = useState<ImportedLiveMatchData | null>(null);
+  const [importedLiveLoading, setImportedLiveLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -190,10 +199,12 @@ export default function HomePage() {
   const supabase = useMemo(() => getSupabase(), []);
   const mode = supabase ? "cloud" : "demo";
 
-  const hasActiveMatch = Boolean(loadedUrl && (!supabase || cloudMatchId));
+  const hasActiveMatch = Boolean(supabase ? cloudMatchId : loadedUrl);
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
-  const canRecord = hasActiveMatch && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
-  const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst"));
+  const canRecord = hasActiveMatch && Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
+  const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && loadedUrl && (role === "admin" || role === "analyst"));
+  const isAttachingLiveVideo = Boolean(matches.find((match) => match.id === cloudMatchId)?.source_public_live_match_id
+    && !matches.find((match) => match.id === cloudMatchId)?.youtube_url);
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
     if (teamName) setTeam(teamName);
@@ -267,8 +278,14 @@ export default function HomePage() {
     if (!supabase || !projectId) return;
     let cancelled = false;
     const loadMatches = async () => {
+      const { error: syncError } = await supabase.rpc("sync_finished_public_live_matches", { target_project: projectId });
+      if (cancelled) return;
+      if (syncError) {
+        setMessage(syncError.message);
+        return;
+      }
       const { data, error } = await supabase.from("matches")
-        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at")
+        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at, played_at, competition, round_label, kickoff_time, venue, live_status, source_public_live_match_id")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -280,16 +297,23 @@ export default function HomePage() {
       setMatches((data ?? []) as Match[]);
     };
     void loadMatches();
+    const refreshTimer = window.setInterval(() => void loadMatches(), 15000);
     const channel = supabase.channel(`project-matches-${projectId}`)
       .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "matches", filter: `project_id=eq.${projectId}`,
+        event: "*", schema: "public", table: "matches", filter: `project_id=eq.${projectId}`,
       }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as { id: string }).id;
+          setMatches((current) => current.filter((match) => match.id !== id));
+          return;
+        }
         const row = payload.new as Match;
-        setMatches((current) => current.some((match) => match.id === row.id) ? current : [row, ...current]);
+        setMatches((current) => [row, ...current.filter((match) => match.id !== row.id)]);
       })
       .subscribe();
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
       void supabase.removeChannel(channel);
     };
   }, [supabase, projectId]);
@@ -542,6 +566,20 @@ export default function HomePage() {
     setMessage(t.removed);
   }
 
+  async function loadImportedLiveData(publicMatchId: string) {
+    if (!supabase) return;
+    setImportedLiveLoading(true);
+    setImportedLiveData(null);
+    const { data, error } = await supabase.rpc("get_public_live_match", { p_match_id: publicMatchId });
+    if (error || !data?.match) {
+      setMessage(error?.message ?? (language === "pt" ? "Não foi possível carregar os tempos do jogo." : "Could not load match time data."));
+      setImportedLiveLoading(false);
+      return;
+    }
+    setImportedLiveData(data as ImportedLiveMatchData);
+    setImportedLiveLoading(false);
+  }
+
   async function loadVideo() {
     setAiCandidates([]);
     setAiConsent(false);
@@ -551,22 +589,33 @@ export default function HomePage() {
     if (!id) { setMessage(t.linkBad); return; }
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
-      const { data: existing, error: lookupError } = await supabase.from("matches")
-        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at")
-        .eq("project_id", projectId).eq("home_team", team).eq("away_team", opponent)
-        .eq("youtube_url", videoUrl.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (lookupError) { setMessage(lookupError.message); return; }
-      let savedMatch = existing as Match | null;
-      if (!savedMatch) {
-        const { data: created, error } = await supabase.from("matches").insert({
-          project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
-          youtube_url: videoUrl.trim(), created_by: cloudUserId,
-        }).select("id, home_team, away_team, analyzed_team, youtube_url, created_at").single();
-        if (error || !created) { setMessage(error?.message ?? t.saveError); return; }
-        savedMatch = created as Match;
+      const selectedMatch = matches.find((match) => match.id === cloudMatchId);
+      let savedMatch: Match | null = null;
+      if (selectedMatch?.source_public_live_match_id && !selectedMatch.youtube_url) {
+        const { data: updated, error } = await supabase.from("matches")
+          .update({ youtube_url: videoUrl.trim() })
+          .eq("id", selectedMatch.id).select("*").single();
+        if (error || !updated) { setMessage(error?.message ?? t.saveError); return; }
+        savedMatch = updated as Match;
+      } else {
+        const { data: existing, error: lookupError } = await supabase.from("matches")
+          .select("*")
+          .eq("project_id", projectId).eq("home_team", team).eq("away_team", opponent)
+          .eq("youtube_url", videoUrl.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (lookupError) { setMessage(lookupError.message); return; }
+        savedMatch = existing as Match | null;
+        if (!savedMatch) {
+          const { data: created, error } = await supabase.from("matches").insert({
+            project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
+            youtube_url: videoUrl.trim(), created_by: cloudUserId,
+          }).select("*").single();
+          if (error || !created) { setMessage(error?.message ?? t.saveError); return; }
+          savedMatch = created as Match;
+        }
       }
       setMatches((current) => [savedMatch!, ...current.filter((match) => match.id !== savedMatch!.id)]);
       setCloudMatchId(savedMatch.id);
+      setImportedLiveData(selectedMatch?.source_public_live_match_id ? importedLiveData : null);
       setRecords([]);
       void loadShareForMatch(savedMatch.id);
     } else {
@@ -589,20 +638,42 @@ export default function HomePage() {
     setAiConsent(false);
     setAiError("");
     setAiStatus("");
-    const id = parseYouTubeId(match.youtube_url);
-    if (!id) { setMessage(t.linkBad); return; }
+    const storedUrl = match.youtube_url ?? "";
+    const id = parseYouTubeId(storedUrl);
+    if (storedUrl && !id) { setMessage(t.linkBad); return; }
     const opponentName = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
     setTeam(match.analyzed_team);
     setOpponent(opponentName);
-    setVideoUrl(match.youtube_url);
-    setLoadedUrl(match.youtube_url);
+    setVideoUrl(storedUrl);
+    setLoadedUrl(storedUrl);
     setCloudMatchId(match.id);
     void loadShareForMatch(match.id);
-    setVideoId(id);
+    setVideoId(id ?? "");
     setCurrentSecond(0);
     setRecords([]);
-    if (playerRef.current && videoId === id) playerRef.current.seekTo(0, true);
-    setMessage(t.matchOpened);
+    setImportedLiveData(null);
+    if (match.source_public_live_match_id) void loadImportedLiveData(match.source_public_live_match_id);
+    else setImportedLiveLoading(false);
+    if (id && playerRef.current && videoId === id) playerRef.current.seekTo(0, true);
+    setMessage(storedUrl ? t.matchOpened : (language === "pt"
+      ? "Jogo aberto sem vídeo. Os tempos dos jogadores estão disponíveis abaixo; associa um URL do YouTube para iniciar a análise."
+      : "Match opened without video. Player time data is shown below; add a YouTube URL to begin analysis."));
+    setSidebarOpen(false);
+  }
+
+  function startNewMatch() {
+    shareRequestRef.current += 1;
+    setCloudMatchId(null);
+    setVideoUrl("");
+    setLoadedUrl("");
+    setVideoId("");
+    setCurrentSecond(0);
+    setRecords([]);
+    setImportedLiveData(null);
+    setImportedLiveLoading(false);
+    setPublicShareToken(null);
+    setPublicShareUrl("");
+    setShareBusy(false);
     setSidebarOpen(false);
   }
 
@@ -770,8 +841,8 @@ export default function HomePage() {
           {(!supabase || projectId) && <>
             <section className="grid gap-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.newMatch}</h3>
-                {cloudMatchId && <span className="rounded-full bg-[#35d07f18] px-2 py-0.5 text-[10px] text-[#70eaa5]">{t.currentMatch}</span>}
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{isAttachingLiveVideo ? (language === "pt" ? "Associar vídeo ao jogo selecionado" : "Attach video to selected match") : t.newMatch}</h3>
+                {cloudMatchId && <button type="button" className="rounded border border-[#31475a] px-2 py-1 text-[10px] text-[#b9d0df]" onClick={startNewMatch}>{language === "pt" ? "Novo jogo" : "New match"}</button>}
               </div>
               <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.analyzed}
                 <input className="field mt-1 !px-2.5 !py-2 text-xs" value={team} onChange={(e) => setTeam(e.target.value)} />
@@ -782,7 +853,7 @@ export default function HomePage() {
               <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.youtube}
                 <input className="field mt-1 !px-2.5 !py-2 text-xs" placeholder="youtube.com/watch?v=…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
               </label>
-              <button className="btn btn-primary w-full !py-2 text-xs" disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"} onClick={() => void loadVideo()}><Video size={14} />{t.load}</button>
+              <button className="btn btn-primary w-full !py-2 text-xs" disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"} onClick={() => void loadVideo()}><Video size={14} />{isAttachingLiveVideo ? (language === "pt" ? "Associar vídeo e iniciar análise" : "Attach video and start analysis") : t.load}</button>
             </section>
           </>}
 
@@ -797,10 +868,17 @@ export default function HomePage() {
                 return <div key={match.id} className={`rounded-lg border p-2 ${cloudMatchId === match.id ? "border-[#35d07f80] bg-[#35d07f0e]" : "border-[#263646] bg-[#0b131c]"}`}>
                   <button className="block w-full text-left" onClick={() => openSavedMatch(match)} title={t.openMatch}>
                     <p className="truncate text-xs font-semibold">{match.analyzed_team} <span className="muted font-normal">vs</span> {opposingTeam}</p>
-                    <p className="muted mt-1 text-[10px]">{new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "short" }).format(new Date(match.created_at))}</p>
+                    <p className="muted mt-1 text-[10px]">
+                      {match.competition ? `${match.competition} · ` : ""}
+                      {new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "short" }).format(new Date(match.played_at ?? match.created_at))}
+                      {match.kickoff_time ? ` · ${match.kickoff_time.slice(0, 5)}` : ""}
+                    </p>
+                    {match.source_public_live_match_id && <p className="mt-1 text-[9px] font-semibold text-[#83e6a9]">{language === "pt" ? "Jogo ao vivo · Terminado" : "Live match · Finished"}</p>}
                   </button>
                   <div className="mt-1 flex items-center justify-between gap-2">
-                    <a className="flex min-w-0 items-center gap-1 truncate text-[10px] text-[#8fc8ff] hover:underline" href={match.youtube_url} target="_blank" rel="noreferrer"><Link2 size={11} className="shrink-0" />{language === "pt" ? "Link do vídeo" : "Video link"}</a>
+                    {match.youtube_url
+                      ? <a className="flex min-w-0 items-center gap-1 truncate text-[10px] text-[#8fc8ff] hover:underline" href={match.youtube_url} target="_blank" rel="noreferrer"><Link2 size={11} className="shrink-0" />{language === "pt" ? "Link do vídeo" : "Video link"}</a>
+                      : <span className="text-[10px] text-amber-300">{language === "pt" ? "Sem vídeo associado" : "No video attached"}</span>}
                     <button className="rounded border border-[#31475a] px-2 py-1 text-[10px] hover:border-[#5f819e]" onClick={() => openSavedMatch(match)}>{t.openMatch}</button>
                   </div>
                 </div>;
@@ -828,18 +906,23 @@ export default function HomePage() {
             <p className="muted">{t.noActiveMatch}</p>
           </div>}
 
-          <div className={`analysis-workspace grid min-w-0 items-start gap-3 ${hasActiveMatch ? "with-event-controls" : "without-event-controls"}`}>
+          <div className={`analysis-workspace grid min-w-0 items-start gap-3 ${hasActiveMatch && loadedUrl ? "with-event-controls" : "without-event-controls"}`}>
           <section className="analysis-video-panel panel min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#263646] px-3 py-2">
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
               <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-1.5 inline" size={13} />{formatTime(currentSecond)}</span>
             </div>
             <div className="video-stage relative w-full overflow-hidden bg-black">
-              {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[#8798a8]"><Video size={34} strokeWidth={1.2} /><p className="text-sm">{t.videoHelp}</p></div>}
+              {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-[#8798a8]">
+                <Video size={34} strokeWidth={1.2} />
+                <p className="text-sm">{cloudMatchId && matches.find((match) => match.id === cloudMatchId)?.source_public_live_match_id
+                  ? (language === "pt" ? "Jogo ao vivo terminado. Consulta os tempos abaixo e associa um vídeo YouTube para iniciar a análise técnico-tática." : "Live match finished. Review the player times below and attach a YouTube video to begin technical-tactical analysis.")
+                  : t.videoHelp}</p>
+              </div>}
             </div>
           </section>
 
-          {hasActiveMatch && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
+          {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
             <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
               <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
               <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
@@ -910,10 +993,59 @@ export default function HomePage() {
             
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
           </section>}
-          {hasActiveMatch && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
+          {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
           </div>
 
-          {hasActiveMatch && <>
+          {hasActiveMatch && importedLiveLoading && (
+            <section className="panel p-3 text-xs text-[#a8b8c7]">{language === "pt" ? "A carregar tempos do jogo ao vivo…" : "Loading live-match player times…"}</section>
+          )}
+          {hasActiveMatch && importedLiveData && (
+            <section className="panel grid gap-3 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold">{language === "pt" ? "Tempos de utilização dos jogadores" : "Player court-time report"}</h2>
+                  <p className="muted mt-1 text-[10px]">{language === "pt" ? "Registo importado do jogo ao vivo · ordenado por tempo em campo" : "Imported from live match · sorted by court time"}</p>
+                </div>
+                <span className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[10px] text-[#8ee8ae]">{formatDuration(importedLiveData.clock.elapsed_seconds)} · {language === "pt" ? "tempo total" : "total time"}</span>
+              </div>
+              {importedLiveData.clock.first_half_seconds === null && (
+                <p className="rounded border border-amber-700/60 bg-amber-950/30 p-2 text-[10px] text-amber-200">
+                  {language === "pt" ? "O intervalo não foi registado. A totalidade do tempo está na 1.ª parte; a 2.ª parte apresenta zero." : "Halftime was not recorded. All time is assigned to the first half; the second half is zero."}
+                </p>
+              )}
+              {[
+                { title: "1ª Parte", start: 0, end: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds },
+                { title: "2ª Parte", start: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds, end: importedLiveData.clock.elapsed_seconds },
+                { title: "Tempo total do jogo", start: 0, end: importedLiveData.clock.elapsed_seconds },
+              ].map((section) => {
+                const rows = importedLiveData.players.map((player) => ({
+                  id: player.id, name: player.display_name || player.full_name,
+                  seconds: playerCourtSecondsInRange(importedLiveData.stints, player.id, section.start, section.end),
+                })).sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name, "pt-PT"));
+                return (
+                  <div key={section.title} className="overflow-x-auto rounded-lg border border-[#263646]">
+                    <div className="flex items-center justify-between gap-2 bg-[#142330] px-3 py-2">
+                      <h3 className="text-xs font-semibold text-white">{section.title}</h3>
+                      <span className="font-mono text-[10px] text-[#8ee8ae]">{formatDuration(section.end - section.start)}</span>
+                    </div>
+                    <table className="w-full min-w-[280px] text-left text-[10px]">
+                      <thead className="bg-[#1d8050] text-white">
+                        <tr><th className="px-2 py-2">#</th><th className="px-2 py-2">{language === "pt" ? "Jogador" : "Player"}</th><th className="px-2 py-2 text-right">{language === "pt" ? "Tempo em campo" : "Court time"}</th></tr>
+                      </thead>
+                      <tbody>{rows.map((row, index) => (
+                        <tr key={row.id} className={index % 2 === 0 ? "bg-[#101923]" : "bg-[#182533]"}>
+                          <td className="px-2 py-2 text-[#93a8b8]">{index + 1}</td>
+                          <td className="px-2 py-2 font-medium text-white">{row.name}</td>
+                          <td className="px-2 py-2 text-right font-mono text-[#b7f0cc]">{formatDuration(row.seconds)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+          {hasActiveMatch && Boolean(loadedUrl) && <>
             <section className="grid gap-2 sm:grid-cols-3">
               {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
             </section>
@@ -962,7 +1094,7 @@ export default function HomePage() {
             <button className="btn btn-primary h-[38px] text-xs" onClick={() => void createEventType()}><FilePlus2 size={13} />{t.create}</button>
           </section>}
 
-          {hasActiveMatch && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+          {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
                 <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
