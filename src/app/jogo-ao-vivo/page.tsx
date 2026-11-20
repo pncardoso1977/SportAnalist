@@ -201,10 +201,7 @@ export default function LiveMatchManagementPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!supabase) {
-      setAuthReady(true);
-      return;
-    }
+    if (!supabase) return;
     let cancelled = false;
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
