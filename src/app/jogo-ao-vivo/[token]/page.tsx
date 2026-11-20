@@ -19,10 +19,8 @@ type PublicSquadPlayer = {
   sort_order: number;
 };
 
-type PublicMatchDetails = Omit<LiveMatch, "id">;
-
 type PublicLiveMatch = {
-  match: PublicMatchDetails;
+  match: LiveMatch;
   clock: LiveClock;
   players: PublicSquadPlayer[];
   stints: PlayerStint[];
@@ -51,10 +49,10 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
         setLoading(false);
         return;
       }
-      const { data: result, error: rpcError } = await supabase.rpc("get_public_live_match", { p_share_token: token });
+      const { data: result, error: rpcError } = await supabase.rpc("get_public_live_match", { p_match_id: token });
       if (cancelled) return;
       if (rpcError || !result?.match) {
-        setError("Este link não é válido ou a partilha foi desativada pelo responsável.");
+        setError("Este jogo não existe ou está indisponível.");
         setData(null);
       } else {
         setError("");
