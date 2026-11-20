@@ -42,12 +42,10 @@ Migration `0004_public_match_sharing.sql` creates a private token table and narr
 - Use RLS; frontend role choices are not a security boundary.
 
 
-## Live match and player time tracking
+## Public live match and player time tracking
 
-Apply `0005_live_player_time_tracking.sql` after `0004_public_match_sharing.sql`. The authenticated editor page is `/jogo-ao-vivo`; users must be signed in as project `admin` or `analyst`. It seeds the supplied Associação Marista Sub-17 roster into `squad_players` (names and FPF profile IDs only; no dates of birth or photos), creates a match with competition, round, date, time and venue, and starts a database-backed match clock.
+Apply `0006_public_live_match_access.sql` after the existing migrations. This migration creates a separate public data model (`public_live_matches`, `public_live_players`, `public_live_clocks` and `public_live_player_stints`) and narrow security-definer RPCs. The public live area does not use Supabase Auth, project membership or user roles. Anyone can open `/jogo-ao-vivo`, create a fixture, start/pause/finish a clock and record player entries/exits. Anyone can also open a game's public view at `/jogo-ao-vivo/<id>`.
 
-Player substitutions are stored as time intervals in `match_player_stints`. A transactional RPC enforces a maximum of five players on court. The clock can be started, paused and finished; pausing preserves the current on-court lineup without adding playing time.
+**Operational consequence:** this is intentionally open access. Any visitor can modify any match listed in this public area, including the clock and substitutions. Do not use it for private fixtures or where edit permissions must be restricted. The public RPCs do not expose the other SportAnalist project tables, team analysis, video events, user IDs or private project data. The roster stores player names only; no dates of birth or photographs are stored. The five-player limit is enforced by the database.
 
-Each match receives its existing unlisted public share token. The read-only public page is `/jogo-ao-vivo/<token>`; it exposes only the match details, squad names, clock and accumulated player time. It does not allow public writes or reveal user/project IDs, dates of birth or player photographs. The public page refreshes its data automatically.
-
-The first form defaults to the supplied fixture: `CD II DIVISÃO | SUB 17 FUTSAL`, Associação Marista vs Portela, Jornada 7, 21 November 2026 at 17:00, Pavilhão Externato Marista Lisboa. Verify the fixture details before creating the match.
+The first form defaults to the supplied fixture: `CD II DIVISÃO | SUB 17 FUTSAL`, Associação Marista vs Portela, Jornada 7, 21 November 2026 at 17:00, Pavilhão Externato Marista Lisboa. Confirm the fixture details before creating the match.
