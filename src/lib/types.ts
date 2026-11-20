@@ -34,8 +34,15 @@ export type Match = {
   home_team: string;
   away_team: string;
   analyzed_team: string;
-  youtube_url: string;
+  youtube_url: string | null;
   created_at: string;
+  played_at?: string | null;
+  competition?: string | null;
+  round_label?: string | null;
+  kickoff_time?: string | null;
+  venue?: string | null;
+  live_status?: "scheduled" | "live" | "finished" | null;
+  source_public_live_match_id?: string | null;
 };
 
 export const DEFAULT_EVENT_TYPES: EventType[] = [
