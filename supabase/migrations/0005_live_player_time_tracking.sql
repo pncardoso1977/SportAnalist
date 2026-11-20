@@ -156,6 +156,8 @@ begin
     returning * into clock_row;
   end if;
 
+  update public.matches set live_status = 'live' where id = target_match;
+
   return jsonb_build_object(
     'elapsed_seconds', clock_row.elapsed_seconds,
     'started_at', clock_row.started_at,
