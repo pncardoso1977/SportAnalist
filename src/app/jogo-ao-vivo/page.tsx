@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type F
 import Link from "next/link";
 import {
   ArrowLeft, CheckCircle2, Clock3, Copy, ExternalLink, MapPin, Pause,
-  Pencil, Play, RefreshCw, Share2, Timer, Trophy, Users, X,
+  Pencil, Play, RefreshCw, Share2, Timer, Trophy, X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { getClockSnapshot, getServerClockSnapshot, subscribeToClock } from "@/lib/clock-store";
@@ -58,7 +58,7 @@ export default function LiveMatchManagementPage() {
   const [clock, setClock] = useState<LiveClock | null>(null);
   const [players, setPlayers] = useState<LivePlayer[]>([]);
   const [stints, setStints] = useState<PlayerStint[]>([]);
-  const [now] = [useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot)];
+  const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
