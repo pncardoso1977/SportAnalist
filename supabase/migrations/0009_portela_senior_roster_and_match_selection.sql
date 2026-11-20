@@ -33,7 +33,7 @@ values
   ('Rodrigo Pereira Santos', 'Rodrigo Santos', 140, true, 'PORTELA_SENIORES_MASCULINOS', '925151'),
   ('Ruben Miguel Marques Mateus Cunha', 'Ruben Cunha', 150, true, 'PORTELA_SENIORES_MASCULINOS', '967535'),
   ('Tiago Filipe Pereira Baltazar', 'Tiago Baltazar', 160, true, 'PORTELA_SENIORES_MASCULINOS', '892732'),
-  ('Jogador FPF 774758 (nome por confirmar)', 'Jogador 774758', 170, true, 'PORTELA_SENIORES_MASCULINOS', '774758')
+  ('Tiago Sousa', 'Tiago Sousa', 170, true, 'PORTELA_SENIORES_MASCULINOS', '774758')
 on conflict (full_name) do update
 set short_name = excluded.short_name,
     sort_order = excluded.sort_order,
