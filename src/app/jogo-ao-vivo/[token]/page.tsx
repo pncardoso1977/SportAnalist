@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { CalendarDays, Clock3, MapPin, ShieldAlert, Timer, Users } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { getClockSnapshot, getServerClockSnapshot, subscribeToClock } from "@/lib/clock-store";
 import {
   formatDuration,
   liveElapsedSeconds,
@@ -36,14 +37,9 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
   const [data, setData] = useState<PublicLiveMatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(0);
+  const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
   const elapsedSeconds = liveElapsedSeconds(data?.clock ?? null, now);
   const activePlayers = data?.stints.filter((stint) => stint.ended_second === null).length ?? 0;
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
