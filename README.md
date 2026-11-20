@@ -19,7 +19,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador, configure as variáveis Supabase e aplique, por ordem, as migrações `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, `0003_team_event_association.sql` e `0004_public_match_sharing.sql`.
+Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador, configure as variáveis Supabase e aplique, por ordem, as migrações `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, `0003_team_event_association.sql`, `0004_public_match_sharing.sql` e `0005_live_player_time_tracking.sql`.
 
 ## Variáveis de ambiente
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -52,6 +52,7 @@ Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do
 - Persistência de jogos/eventos e atualizações em tempo real na mesma partida quando Supabase está configurado.
 - Partilha pública individual por jogo, com token aleatório, página de consulta de vídeo/cronologia e possibilidade de revogação pelo editor.
 - Sugestões de golos a partir do URL YouTube (incluindo vídeos não listados) através de Firebase AI Logic/Gemini; requer consentimento e confirmação do analista.
+- Área responsiva de jogo ao vivo em `/jogo-ao-vivo`, com cronómetro, substituições e cálculo automático do tempo em campo por jogador; página pública de consulta por token em `/jogo-ao-vivo/[token]`.
 
 ## Estado e pré-requisitos de produção
 O código e a migração estão no repositório; a publicação online ainda não foi ativada. É necessário criar o projeto Supabase, aplicar a migração e importar o repositório na Vercel seguindo [docs/deployment.md](docs/deployment.md). Os planos gratuitos têm quotas e não equivalem a serviço sem limites.
