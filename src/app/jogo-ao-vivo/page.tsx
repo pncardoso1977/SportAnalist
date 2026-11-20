@@ -82,25 +82,33 @@ export default function LiveMatchManagementPage() {
   const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
   const isJuniores = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 19 FUTSAL";
   const isJuvenis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 17 FUTSAL";
+  const isIniciados = competition.trim().toUpperCase() === "CD I DIVISÃO | SUB 15 FUTSAL";
+  const isInfantis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 13 FUTSAL";
   const lowerRosterCompetition = isPortelaSenior
     ? "CD II DIVISÃO | SUB 19 FUTSAL"
     : isJuniores
       ? "CD II DIVISÃO | SUB 17 FUTSAL"
       : isJuvenis
         ? "CD I DIVISÃO | SUB 15 FUTSAL"
-        : "";
+        : isIniciados
+          ? "CD II DIVISÃO | SUB 13 FUTSAL"
+          : "";
   const primaryRosterLabel = isPortelaSenior
     ? "Seniores Masculinos"
     : isJuniores
       ? "Juniores Sub-19"
       : isJuvenis
         ? "Juvenis Sub-17"
-        : "Iniciados Sub-15";
+        : isIniciados
+          ? "Iniciados Sub-15"
+          : "Infantis Sub-13";
   const lowerRosterLabel = isPortelaSenior
     ? "Juniores Sub-19"
     : isJuniores
       ? "Juvenis Sub-17"
-      : "Iniciados Sub-15";
+      : isJuvenis
+        ? "Iniciados Sub-15"
+        : "Infantis Sub-13";
   const visibleRosterCount = rosterPlayers.length + (showLowerRoster ? lowerRosterPlayers.length : 0);
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
@@ -431,6 +439,7 @@ export default function LiveMatchManagementPage() {
                       }}
                       required
                     >
+                      <option value="CD II DIVISÃO | SUB 13 FUTSAL">CD II DIVISÃO | SUB 13 FUTSAL · Infantis</option>
                       <option value="CD I DIVISÃO | SUB 15 FUTSAL">CD I DIVISÃO | SUB 15 FUTSAL · Iniciados</option>
                       <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL · Juvenis</option>
                       <option value="CD II DIVISÃO | SUB 19 FUTSAL">CD II DIVISÃO | SUB 19 FUTSAL · Juniores</option>
