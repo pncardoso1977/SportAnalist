@@ -282,10 +282,9 @@ export default function HomePage() {
       if (cancelled) return;
       if (syncError) {
         setMessage(syncError.message);
-        return;
       }
       const { data, error } = await supabase.from("matches")
-        .select("id, home_team, away_team, analyzed_team, youtube_url, created_at, played_at, competition, round_label, kickoff_time, venue, live_status, source_public_live_match_id")
+        .select("*")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(100);
