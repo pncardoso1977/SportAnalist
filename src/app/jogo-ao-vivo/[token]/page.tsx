@@ -121,7 +121,7 @@ export default function PublicLiveMatchPage({ params }: { params: Promise<{ toke
               <h2 className="text-xs font-semibold">Tempo por jogador</h2>
               <span className="muted inline-flex items-center gap-1 text-[9px]"><Users size={11} />{data.players.length}/12 jogadores · atualização automática</span>
             </div>
-            <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
+            <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
               {data.players.map((player) => {
                 const onCourt = data.stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                 const seconds = playerCourtSeconds(data.stints, player.id, elapsedSeconds);
