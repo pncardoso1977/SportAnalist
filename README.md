@@ -19,7 +19,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador da análise técnico-tática, configure as variáveis Supabase e aplique as migrações `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql`. Para a área pública de jogo ao vivo sem autenticação, aplique também `0006_public_live_match_access.sql` e `0007_live_player_display_names.sql`.
+Sem variáveis Supabase, a interface funciona em modo demonstração com persistência local no browser. Para autenticação e sincronização multiutilizador da análise técnico-tática, configure as variáveis Supabase e aplique as migrações `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql`. Para a área pública de jogo ao vivo sem autenticação, aplique também `0006_public_live_match_access.sql`, `0007_live_player_display_names.sql` e `0008_public_live_twelfth_player.sql`.
 
 ## Variáveis de ambiente
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -38,7 +38,7 @@ As variáveis Firebase são configuração pública da Web App; não colocar cha
 - `viewer`: apenas leitura
 
 ## Publicação
-Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql`, `0006_public_live_match_access.sql` e `0007_live_player_display_names.sql`, e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md) e [docs/ai-goal-detection.md](docs/ai-goal-detection.md).
+Repositório Git ligado ao projeto Vercel `sport-analist`. A branch principal do GitHub é `main`; a Vercel seleciona `main` por predefinição quando existe. Cada novo commit nesta branch deve desencadear um deployment. Para ativar os dados partilhados, criar o projeto Supabase, definir as variáveis de ambiente, executar as migrações SQL `0001_initial_schema.sql` a `0005_live_player_time_tracking.sql`, `0006_public_live_match_access.sql`, `0007_live_player_display_names.sql` e `0008_public_live_twelfth_player.sql`, e configurar os URLs de redirecionamento de Auth. Consultar [docs/deployment.md](docs/deployment.md) e [docs/ai-goal-detection.md](docs/ai-goal-detection.md).
 
 ## Funcionalidades implementadas
 - Player YouTube com leitura do segundo atual e links diretos para cada evento.
