@@ -154,6 +154,10 @@ begin
 end;
 $$;
 
+-- Migration 0005 defined this UUID signature with the old input parameter name
+-- p_share_token. PostgreSQL requires dropping it before changing that name.
+drop function if exists public.get_public_live_match(uuid);
+
 create or replace function public.get_public_live_match(p_match_id uuid)
 returns jsonb
 language sql
