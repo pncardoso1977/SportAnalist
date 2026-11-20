@@ -7,6 +7,9 @@
 - `matches`: opponent, analysed team and YouTube source.
 - `event_types`: project-configurable bilingual event catalogue.
 - `match_events`: timestamp, event type, court zone, phase, associated `team_id`, attacking/defending teams, author and direct YouTube timestamp URL.
+- `squad_players`: project roster with FPF reference IDs and names; birth dates and photos are deliberately not stored.
+- `live_match_clocks`: authoritative elapsed match clock with running/paused/finished state.
+- `match_player_stints`: per-player on-court intervals measured against the match clock.
 - `profiles`: user display name and preferred language.
 
 ## Roles
@@ -73,4 +76,13 @@ The editor invokes Firebase AI Logic from the browser using the saved YouTube UR
 
 AI results are suggestions only. An editor confirms the scoring side and event details before the normal `match_events` insertion path is called. This preserves the existing invariant: `attack` belongs to the analysed team; `defense` belongs to the opponent. The editor provides the kit colours as prompt context. A candidate with an uncertain scoring side cannot be saved until the editor selects a team.
 
-Firebase App Check is initialised with the reCAPTCHA v3 site key. See [ai-goal-detection.md](ai-goal-detection.md) for Firebase, App Check and Vercel configuration, free-tier data handling and known limitations.
+Firebase App Check is initialised with the reCAPTCHA Enterprise provider. See [ai-goal-detection.md](ai-goal-detection.md) for Firebase, App Check and Vercel configuration, free-tier data handling and known limitations.
+
+
+## Live match time tracking
+
+The authenticated `/jogo-ao-vivo` editor creates match metadata on `matches` and a `live_match_clocks` row is automatically created by trigger. The match clock is controlled by security-definer RPCs and records a database timestamp for start/pause transitions, so refreshes do not reset the elapsed time. Player entry/exit is written by `set_live_match_player`, which locks the match clock row, enforces the maximum of five players on court, and creates/closes rows in `match_player_stints`.
+
+A match editor must have the `admin` or `analyst` project role. Public spectators receive a tokenised read-only projection from `get_public_live_match(token)` at `/jogo-ao-vivo/[token]`; the function returns only match metadata, player names, active status, clock and stint intervals. Public writes are not granted. The public page is noindex/nofollow.
+
+The supplied Sub-17 roster is seeded per project using FPF player IDs as stable references. Only player names and FPF IDs are kept; dates of birth and photographs are not replicated into SportAnalist.
