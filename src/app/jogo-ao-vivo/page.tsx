@@ -217,8 +217,8 @@ export default function LiveMatchManagementPage() {
   async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
-    if (selectedPlayerIds.length !== 12) {
-      setError("Seleciona exatamente 12 jogadores para este jogo.");
+    if (selectedPlayerIds.length < 1 || selectedPlayerIds.length > 12) {
+      setError("Seleciona entre 1 e 12 jogadores para este jogo.");
       return;
     }
     setSaving(true);
@@ -458,7 +458,7 @@ export default function LiveMatchManagementPage() {
                   <div className="grid gap-2 rounded-xl border border-[#263646] bg-[#0b131c] p-3 sm:col-span-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-semibold text-white">Convocatória · selecionar 12 jogadores</p>
+                        <p className="text-xs font-semibold text-white">Convocatória · até 12 jogadores</p>
                         <p className="muted text-[10px]">Plantel AMPortela · {primaryRosterLabel}</p>
                       </div>
                       <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === 12 ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
@@ -505,12 +505,12 @@ export default function LiveMatchManagementPage() {
                     {rosterPlayers.length === 0 ? (
                       <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0012.</p>
                     ) : (
-                      <p className="muted text-[10px]">Disponíveis: {visibleRosterCount}. Só os 12 selecionados serão incluídos no jogo.</p>
+                      <p className="muted text-[10px]">Disponíveis: {visibleRosterCount}. Só os jogadores selecionados serão incluídos no jogo.</p>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
                     <p className="muted text-[10px]">A lista pública apresenta nomes e tempos de jogo; não inclui datas de nascimento nem fotografias.</p>
-                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length !== 12 || visibleRosterCount < 12}>
+                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length < 1 || selectedPlayerIds.length > 12 || visibleRosterCount < 1}>
                       <Trophy size={15} />{saving ? "A criar jogo…" : "Criar jogo e abrir cronómetro"}
                     </button>
                   </div>
