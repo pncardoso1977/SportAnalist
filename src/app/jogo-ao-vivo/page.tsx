@@ -268,9 +268,16 @@ export default function LiveMatchManagementPage() {
   const publicUrl = activeMatch && typeof window !== "undefined"
     ? `${window.location.origin}/jogo-ao-vivo/${activeMatch.id}`
     : "";
-  const scheduledMatches = matches.filter((match) => match.live_status === "scheduled");
-  const liveMatches = matches.filter((match) => match.live_status === "live");
-  const finishedMatches = matches.filter((match) => match.live_status === "finished");
+  const isFinishedMatch = (match: LiveMatch) =>
+    match.clock_status === "finished" || match.live_status === "finished";
+  const isInProgressMatch = (match: LiveMatch) =>
+    !isFinishedMatch(match) && (match.clock_status === "running" || match.live_status === "live");
+  const finishedMatches = matches.filter(isFinishedMatch);
+  const liveMatches = matches.filter(isInProgressMatch);
+  const scheduledMatches = matches.filter((match) =>
+    !isFinishedMatch(match) && !isInProgressMatch(match)
+  );
+  const needsClockStatusMigration = matches.some((match) => match.clock_status === undefined);
 
   const refreshMatches = useCallback(async () => {
     if (!supabase) return;
@@ -826,7 +833,10 @@ export default function LiveMatchManagementPage() {
 
               <section className="panel grid gap-3 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-semibold">Jogos terminados <span className="muted font-normal">({finishedMatches.length})</span></h2>
+                  <div>
+                    <h2 className="text-sm font-semibold">Jogos terminados <span className="muted font-normal">({finishedMatches.length})</span></h2>
+                    {needsClockStatusMigration && <p className="mt-1 text-[10px] text-amber-300">Para identificar jogos antigos pelo estado real do cronómetro, aplica a migração SQL 0021.</p>}
+                  </div>
                   <button type="button" onClick={() => void refreshMatches().catch((refreshError) => setError(getErrorMessage(refreshError)))}
                     className="btn !px-2.5 !py-2 text-xs" disabled={loading}>
                     <RefreshCw size={13} />Atualizar
