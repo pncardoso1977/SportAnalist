@@ -62,7 +62,7 @@ export default function LiveMatchManagementPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
-  const [editingNames, setEditingNames] = useState(true);
+  const [editingNames, setEditingNames] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [competition, setCompetition] = useState(INITIAL_FIXTURE.competition);
@@ -99,7 +99,7 @@ export default function LiveMatchManagementPage() {
       setClock(result.clock);
       setPlayers(result.players ?? []);
       setStints(result.stints ?? []);
-      setEditingNames(true);
+      setEditingNames(false);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -390,35 +390,50 @@ export default function LiveMatchManagementPage() {
                     const activeStint = stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                     const totalSeconds = playerCourtSeconds(stints, player.id, elapsedSeconds);
                     const disablingEntry = !activeStint && onCourtCount >= 5;
-                    return (
-                      <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1 ${activeStint ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
-                        {editingNames ? (
-                          <input
-                            aria-label={`Nome curto de ${player.full_name}`}
-                            className="w-full min-w-0 truncate border-0 bg-transparent p-0 text-[10px] font-semibold leading-4 text-white outline-none placeholder:text-[#708497] focus:ring-0"
-                            value={player.display_name}
-                            maxLength={40}
-                            onChange={(event) => setPlayers((current) => current.map((item) =>
-                              item.id === player.id ? { ...item, display_name: event.target.value } : item
-                            ))}
-                            onBlur={() => void savePlayerDisplayName(player)}
-                            onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-                          />
-                        ) : (
-                          <p className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</p>
-                        )}
+                    const cardColors = activeStint
+                      ? "border-[#49bd78] bg-[#155c36] hover:bg-[#1b7043]"
+                      : "border-[#e5a04b] bg-[#935012] hover:bg-[#a85e16]";
+                    const cardDisabled = saving || busyPlayerId !== null || clock?.status === "finished" || disablingEntry;
+                    return editingNames ? (
+                      <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1 ${activeStint ? "border-[#49bd78] bg-[#155c36]" : "border-[#e5a04b] bg-[#935012]"}`}>
+                        <input
+                          aria-label={`Nome curto de ${player.full_name}`}
+                          className="w-full min-w-0 truncate border-0 bg-transparent p-0 text-[10px] font-semibold leading-4 text-white outline-none placeholder:text-white/60 focus:ring-0"
+                          value={player.display_name}
+                          maxLength={40}
+                          onChange={(event) => setPlayers((current) => current.map((item) =>
+                            item.id === player.id ? { ...item, display_name: event.target.value } : item
+                          ))}
+                          onBlur={() => void savePlayerDisplayName(player)}
+                          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                        />
                         <div className="mt-1 flex items-center justify-between gap-1">
-                          <span className="flex min-w-0 items-center gap-0.5 font-mono text-[9px] text-[#a8b8c7]">
+                          <span className="flex min-w-0 items-center gap-0.5 font-mono text-[9px] text-white/90">
                             <Clock3 size={10} />{formatDuration(totalSeconds)}
                           </span>
-                          <button type="button"
-                            className={`min-h-7 min-w-[42px] rounded-md px-1.5 text-[9px] font-bold ${activeStint ? "bg-[#39201b] text-[#ffb39d]" : "bg-[#112820] text-[#79e9aa]"}`}
-                            disabled={saving || busyPlayerId !== null || clock?.status === "finished" || disablingEntry}
-                            onClick={() => void togglePlayer(player, activeStint)}>
-                            {busyPlayerId === player.id ? "…" : activeStint ? "Sair" : "Entrar"}
-                          </button>
+                          <span className="text-[8px] font-bold text-white/90">{activeStint ? "CAMPO" : "BANCO"}</span>
                         </div>
                       </div>
+                    ) : (
+                      <button
+                        key={player.id}
+                        type="button"
+                        className={`w-full min-w-0 rounded-lg border px-1.5 py-1 text-left text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-60 ${cardColors}`}
+                        disabled={cardDisabled}
+                        aria-pressed={activeStint}
+                        aria-label={`${player.display_name}, ${activeStint ? "em campo" : "no banco"}, ${formatDuration(totalSeconds)}. ${activeStint ? "Retirar do campo" : "Colocar em campo"}`}
+                        onClick={() => void togglePlayer(player, activeStint)}
+                      >
+                        <span className="flex min-w-0 items-center justify-between gap-1">
+                          <span className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</span>
+                          <span className="shrink-0 rounded bg-black/15 px-1 py-0.5 text-[8px] font-bold text-white/90">
+                            {busyPlayerId === player.id ? "…" : activeStint ? "CAMPO" : "BANCO"}
+                          </span>
+                        </span>
+                        <span className="mt-1 flex items-center gap-0.5 font-mono text-[9px] text-white/90">
+                          <Clock3 size={10} />{formatDuration(totalSeconds)}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
