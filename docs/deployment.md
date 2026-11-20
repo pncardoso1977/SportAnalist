@@ -2,7 +2,7 @@
 
 ## 1. Supabase
 1. Create a Supabase project on the free plan.
-2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql` and `0004_public_match_sharing.sql`.
+2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql`, `0004_public_match_sharing.sql` and `0005_live_player_time_tracking.sql`.
 3. In Authentication settings, configure the allowed site URL and email confirmation policy.
 4. Copy the Project URL and publishable key. Do not expose a service-role key in browser code.
 
@@ -40,3 +40,14 @@ Migration `0004_public_match_sharing.sql` creates a private token table and narr
 - Keep the repository public only if the code is intended to be public.
 - Never commit `.env.local`, access tokens, passwords or the Supabase service-role key.
 - Use RLS; frontend role choices are not a security boundary.
+
+
+## Live match and player time tracking
+
+Apply `0005_live_player_time_tracking.sql` after `0004_public_match_sharing.sql`. The authenticated editor page is `/jogo-ao-vivo`; users must be signed in as project `admin` or `analyst`. It seeds the supplied Associação Marista Sub-17 roster into `squad_players` (names and FPF profile IDs only; no dates of birth or photos), creates a match with competition, round, date, time and venue, and starts a database-backed match clock.
+
+Player substitutions are stored as time intervals in `match_player_stints`. A transactional RPC enforces a maximum of five players on court. The clock can be started, paused and finished; pausing preserves the current on-court lineup without adding playing time.
+
+Each match receives its existing unlisted public share token. The read-only public page is `/jogo-ao-vivo/<token>`; it exposes only the match details, squad names, clock and accumulated player time. It does not allow public writes or reveal user/project IDs, dates of birth or player photographs. The public page refreshes its data automatically.
+
+The first form defaults to the supplied fixture: `CD II DIVISÃO | SUB 17 FUTSAL`, Associação Marista vs Portela, Jornada 7, 21 November 2026 at 17:00, Pavilhão Externato Marista Lisboa. Verify the fixture details before creating the match.
