@@ -519,7 +519,7 @@ export default function LiveMatchManagementPage() {
 
               <section className="panel grid gap-3 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-semibold">Jogos disponíveis</h2>
+                  <h2 className="text-sm font-semibold">Jogos por iniciar</h2>
                   <button type="button" onClick={() => void refreshMatches()} className="btn !px-2.5 !py-2 text-xs" disabled={loading}>
                     <RefreshCw size={13} />Atualizar
                   </button>
