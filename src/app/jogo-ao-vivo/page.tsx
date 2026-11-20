@@ -50,6 +50,17 @@ function getErrorMessage(error: unknown): string {
   return "Ocorreu um erro inesperado. Tenta novamente.";
 }
 
+function getMaxCalledPlayers(competition: string): number {
+  const normalized = competition.trim().toUpperCase();
+  if (normalized === "CD II DIV SENIORES MASCULINOS") return 14;
+  if (
+    normalized === "CD | SUB 11 FUTSAL"
+    || normalized === "FOOTLOURES | FUTSAL | 2026 | SUB 11"
+    || normalized === "ENCONTROS MINI FUTSAL - TRAQUINAS"
+  ) return 15;
+  return 12;
+}
+
 export default function LiveMatchManagementPage() {
   const supabase = useMemo(() => getSupabase(), []);
   const [matches, setMatches] = useState<LiveMatch[]>([]);
@@ -88,6 +99,7 @@ export default function LiveMatchManagementPage() {
   const isBenjamins = normalizedCompetition === "CD | SUB 11 FUTSAL"
     || normalizedCompetition === "FOOTLOURES | FUTSAL | 2026 | SUB 11";
   const isTraquinas = normalizedCompetition === "ENCONTROS MINI FUTSAL - TRAQUINAS";
+  const maxCalledPlayers = getMaxCalledPlayers(competition);
   const lowerRosterCompetition = isPortelaSenior
     ? "CD II DIVISÃO | SUB 19 FUTSAL"
     : isJuniores
@@ -174,9 +186,8 @@ export default function LiveMatchManagementPage() {
         if (cancelled) return;
         const roster = Array.isArray(data) ? data as LivePlayer[] : [];
         setRosterPlayers(roster);
-        // Only the Juvenis roster has exactly twelve players; preselect that complete squad.
-        // Other squads have more options, so choose twelve for each fixture.
-        setSelectedPlayerIds(roster.length === 12 ? roster.map((player) => player.id) : []);
+        // Preselect the complete roster only when it fits within this competition's call-up limit.
+        setSelectedPlayerIds(roster.length > 0 && roster.length <= maxCalledPlayers ? roster.map((player) => player.id) : []);
       } catch (rosterError) {
         if (!cancelled) {
           setRosterPlayers([]);
@@ -187,7 +198,7 @@ export default function LiveMatchManagementPage() {
     }
     void loadRoster();
     return () => { cancelled = true; };
-  }, [competition, supabase]);
+  }, [competition, maxCalledPlayers, supabase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -242,8 +253,8 @@ export default function LiveMatchManagementPage() {
   async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
-    if (selectedPlayerIds.length < 1 || selectedPlayerIds.length > 12) {
-      setError("Seleciona entre 1 e 12 jogadores para este jogo.");
+    if (selectedPlayerIds.length < 1 || selectedPlayerIds.length > maxCalledPlayers) {
+      setError(`Seleciona entre 1 e ${maxCalledPlayers} jogadores para este escalão.`);
       return;
     }
     setSaving(true);
@@ -388,7 +399,7 @@ export default function LiveMatchManagementPage() {
 
   function renderRosterOption(player: LivePlayer) {
     const checked = selectedPlayerIds.includes(player.id);
-    const atLimit = selectedPlayerIds.length >= 12 && !checked;
+    const atLimit = selectedPlayerIds.length >= maxCalledPlayers && !checked;
     return (
       <label key={player.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] ${checked ? "border-[#3b8b60] bg-[#10291c] text-white" : "border-[#263646] bg-[#101923] text-[#c1ccd6]"} ${atLimit ? "opacity-45" : ""}`}>
         <input
@@ -398,7 +409,7 @@ export default function LiveMatchManagementPage() {
           disabled={atLimit || saving}
           onChange={(event) => setSelectedPlayerIds((current) =>
             event.target.checked
-              ? current.length < 12 ? [...current, player.id] : current
+              ? current.length < maxCalledPlayers ? [...current, player.id] : current
               : current.filter((id) => id !== player.id)
           )}
         />
@@ -514,11 +525,11 @@ export default function LiveMatchManagementPage() {
                   <div className="grid gap-2 rounded-xl border border-[#263646] bg-[#0b131c] p-3 sm:col-span-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-semibold text-white">Convocatória · até 12 jogadores</p>
+                        <p className="text-xs font-semibold text-white">Convocatória · até {maxCalledPlayers} jogadores</p>
                         <p className="muted text-[10px]">Plantel AMPortela · {primaryRosterLabel}</p>
                       </div>
-                      <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === 12 ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
-                        {selectedPlayerIds.length}/12 selecionados
+                      <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === maxCalledPlayers ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
+                        {selectedPlayerIds.length}/{maxCalledPlayers} selecionados
                       </span>
                     </div>
                     {lowerRosterCompetition && (
@@ -566,7 +577,7 @@ export default function LiveMatchManagementPage() {
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
                     <p className="muted text-[10px]">A lista pública apresenta nomes e tempos de jogo; não inclui datas de nascimento nem fotografias.</p>
-                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length < 1 || selectedPlayerIds.length > 12 || visibleRosterCount < 1}>
+                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length < 1 || selectedPlayerIds.length > maxCalledPlayers || visibleRosterCount < 1}>
                       <Trophy size={15} />{saving ? "A criar jogo…" : "Criar jogo e abrir cronómetro"}
                     </button>
                   </div>
@@ -650,7 +661,7 @@ export default function LiveMatchManagementPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <h2 className="text-xs font-semibold">Plantel · minutos em campo</h2>
-                    <p className="muted text-[9px]">{onCourtCount}/5 em campo · {players.length}/12 jogadores · nomes editáveis</p>
+                    <p className="muted text-[9px]">{onCourtCount}/5 em campo · {players.length}/{getMaxCalledPlayers(activeMatch.competition)} convocados · nomes editáveis</p>
                   </div>
                   <button type="button" className="btn !min-h-8 !px-2 !py-1 text-[9px]" onClick={() => setEditingNames((current) => !current)}>
                     <Pencil size={11} />{editingNames ? "Concluir nomes" : "Editar nomes"}
