@@ -404,13 +404,13 @@ export default function LiveMatchManagementPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <h2 className="text-xs font-semibold">Plantel · minutos em campo</h2>
-                    <p className="muted text-[9px]">{onCourtCount}/5 em campo · nomes editáveis</p>
+                    <p className="muted text-[9px]">{onCourtCount}/5 em campo · {players.length}/12 jogadores · nomes editáveis</p>
                   </div>
                   <button type="button" className="btn !min-h-8 !px-2 !py-1 text-[9px]" onClick={() => setEditingNames((current) => !current)}>
                     <Pencil size={11} />{editingNames ? "Concluir nomes" : "Editar nomes"}
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
+                <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
                   {players.map((player) => {
                     const activeStint = stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                     const totalSeconds = playerCourtSeconds(stints, player.id, elapsedSeconds);
