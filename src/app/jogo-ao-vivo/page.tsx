@@ -288,7 +288,7 @@ export default function LiveMatchManagementPage() {
             <Timer size={20} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-base font-bold">Jogo ao vivo · Sub-17</h1>
+            <h1 className="text-base font-bold">Jogo ao vivo</h1>
             <p className="muted text-[10px]">Área pública · sem autenticação</p>
           </div>
         </div>
