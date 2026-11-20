@@ -73,10 +73,35 @@ export default function LiveMatchManagementPage() {
   const [kickoffTime, setKickoffTime] = useState(INITIAL_FIXTURE.kickoffTime);
   const [venue, setVenue] = useState(INITIAL_FIXTURE.venue);
   const [rosterPlayers, setRosterPlayers] = useState<LivePlayer[]>([]);
+  const [lowerRosterPlayers, setLowerRosterPlayers] = useState<LivePlayer[]>([]);
+  const [showLowerRoster, setShowLowerRoster] = useState(false);
+  const [loadingLowerRoster, setLoadingLowerRoster] = useState(false);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
 
   const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
   const isJuniores = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 19 FUTSAL";
+  const isJuvenis = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 17 FUTSAL";
+  const isIniciados = competition.trim().toUpperCase() === "CD I DIVISÃO | SUB 15 FUTSAL";
+  const lowerRosterCompetition = isPortelaSenior
+    ? "CD II DIVISÃO | SUB 19 FUTSAL"
+    : isJuniores
+      ? "CD II DIVISÃO | SUB 17 FUTSAL"
+      : isJuvenis
+        ? "CD I DIVISÃO | SUB 15 FUTSAL"
+        : "";
+  const primaryRosterLabel = isPortelaSenior
+    ? "Seniores Masculinos"
+    : isJuniores
+      ? "Juniores Sub-19"
+      : isJuvenis
+        ? "Juvenis Sub-17"
+        : "Iniciados Sub-15";
+  const lowerRosterLabel = isPortelaSenior
+    ? "Juniores Sub-19"
+    : isJuniores
+      ? "Juvenis Sub-17"
+      : "Iniciados Sub-15";
+  const visibleRosterCount = rosterPlayers.length + (showLowerRoster ? lowerRosterPlayers.length : 0);
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
   const onCourtCount = stints.filter((stint) => stint.ended_second === null).length;
@@ -139,6 +164,34 @@ export default function LiveMatchManagementPage() {
     void loadRoster();
     return () => { cancelled = true; };
   }, [competition, supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLowerRoster() {
+      setLowerRosterPlayers([]);
+      if (!supabase || !showLowerRoster || !lowerRosterCompetition) {
+        setLoadingLowerRoster(false);
+        return;
+      }
+      setLoadingLowerRoster(true);
+      try {
+        const { data, error: rosterError } = await supabase.rpc("list_public_live_roster", {
+          p_competition: lowerRosterCompetition,
+        });
+        if (rosterError) throw rosterError;
+        if (!cancelled) setLowerRosterPlayers(Array.isArray(data) ? data as LivePlayer[] : []);
+      } catch (rosterError) {
+        if (!cancelled) {
+          setLowerRosterPlayers([]);
+          setError(getErrorMessage(rosterError));
+        }
+      } finally {
+        if (!cancelled) setLoadingLowerRoster(false);
+      }
+    }
+    void loadLowerRoster();
+    return () => { cancelled = true; };
+  }, [competition, lowerRosterCompetition, showLowerRoster, supabase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,6 +335,27 @@ export default function LiveMatchManagementPage() {
     void loadMatchData(match.id);
   }
 
+  function renderRosterOption(player: LivePlayer) {
+    const checked = selectedPlayerIds.includes(player.id);
+    const atLimit = selectedPlayerIds.length >= 12 && !checked;
+    return (
+      <label key={player.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] ${checked ? "border-[#3b8b60] bg-[#10291c] text-white" : "border-[#263646] bg-[#101923] text-[#c1ccd6]"} ${atLimit ? "opacity-45" : ""}`}>
+        <input
+          type="checkbox"
+          className="accent-emerald-500"
+          checked={checked}
+          disabled={atLimit || saving}
+          onChange={(event) => setSelectedPlayerIds((current) =>
+            event.target.checked
+              ? current.length < 12 ? [...current, player.id] : current
+              : current.filter((id) => id !== player.id)
+          )}
+        />
+        <span className="min-w-0 truncate" title={player.full_name}>{player.display_name}</span>
+      </label>
+    );
+  }
+
   return (
     <main className={`mx-auto flex w-full max-w-5xl flex-col gap-2 px-2 py-2 sm:px-5 sm:py-3 ${activeMatch ? "h-[100svh] overflow-hidden" : "min-h-screen"}`}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -324,10 +398,13 @@ export default function LiveMatchManagementPage() {
                         setCompetition(value);
                         // Clear the previous competition's roster immediately while the new one loads.
                         setRosterPlayers([]);
+                        setLowerRosterPlayers([]);
+                        setShowLowerRoster(false);
                         setSelectedPlayerIds([]);
                       }}
                       required
                     >
+                      <option value="CD I DIVISÃO | SUB 15 FUTSAL">CD I DIVISÃO | SUB 15 FUTSAL · Iniciados</option>
                       <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL · Juvenis</option>
                       <option value="CD II DIVISÃO | SUB 19 FUTSAL">CD II DIVISÃO | SUB 19 FUTSAL · Juniores</option>
                       <option value="CD II DIV SENIORES MASCULINOS">CD II DIV SENIORES MASCULINOS</option>
@@ -383,49 +460,58 @@ export default function LiveMatchManagementPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold text-white">Convocatória · selecionar 12 jogadores</p>
-                        <p className="muted text-[10px]">
-                          {isPortelaSenior
-                            ? "Plantel AMPortela · Seniores Masculinos"
-                            : isJuniores
-                              ? "Plantel AMPortela · Juniores Sub-19"
-                              : "Plantel AMPortela · Juvenis Sub-17"}
-                        </p>
+                        <p className="muted text-[10px]">Plantel AMPortela · {primaryRosterLabel}</p>
                       </div>
                       <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === 12 ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
                         {selectedPlayerIds.length}/12 selecionados
                       </span>
                     </div>
+                    {lowerRosterCompetition && (
+                      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#315b47] bg-[#10251a] px-2.5 py-2 text-[10px] text-white">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-emerald-500"
+                          checked={showLowerRoster}
+                          disabled={saving}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setShowLowerRoster(checked);
+                            if (!checked) {
+                              const lowerIds = new Set(lowerRosterPlayers.map((player) => player.id));
+                              setSelectedPlayerIds((current) => current.filter((id) => !lowerIds.has(id)));
+                            }
+                          }}
+                        />
+                        <span>
+                          <span className="block font-semibold">Mostrar plantel do escalão inferior</span>
+                          <span className="muted block text-[9px]">Permitir convocar jogadores de {lowerRosterLabel}</span>
+                        </span>
+                      </label>
+                    )}
                     <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-                      {rosterPlayers.map((player) => {
-                        const checked = selectedPlayerIds.includes(player.id);
-                        const atLimit = selectedPlayerIds.length >= 12 && !checked;
-                        return (
-                          <label key={player.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] ${checked ? "border-[#3b8b60] bg-[#10291c] text-white" : "border-[#263646] bg-[#101923] text-[#c1ccd6]"} ${atLimit ? "opacity-45" : ""}`}>
-                            <input
-                              type="checkbox"
-                              className="accent-emerald-500"
-                              checked={checked}
-                              disabled={atLimit || saving}
-                              onChange={(event) => setSelectedPlayerIds((current) =>
-                                event.target.checked
-                                  ? current.length < 12 ? [...current, player.id] : current
-                                  : current.filter((id) => id !== player.id)
-                              )}
-                            />
-                            <span className="min-w-0 truncate" title={player.full_name}>{player.display_name}</span>
-                          </label>
-                        );
-                      })}
+                      {rosterPlayers.map(renderRosterOption)}
+                      {showLowerRoster && (
+                        <>
+                          <div className="col-span-full mt-1 border-t border-[#263646] pt-2 text-[10px] font-semibold text-[#8de9ad]">
+                            Plantel inferior · {lowerRosterLabel}
+                          </div>
+                          {lowerRosterPlayers.map(renderRosterOption)}
+                          {loadingLowerRoster && <p className="col-span-full muted text-[10px]">A carregar plantel de {lowerRosterLabel}…</p>}
+                          {!loadingLowerRoster && lowerRosterPlayers.length === 0 && (
+                            <p className="col-span-full text-[10px] text-amber-300">Não foi possível carregar o plantel inferior. Confirma se executaste a migração 0012.</p>
+                          )}
+                        </>
+                      )}
                     </div>
                     {rosterPlayers.length === 0 ? (
-                      <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0010.</p>
+                      <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0012.</p>
                     ) : (
-                      <p className="muted text-[10px]">Disponíveis: {rosterPlayers.length}. Só os 12 selecionados serão incluídos no jogo.</p>
+                      <p className="muted text-[10px]">Disponíveis: {visibleRosterCount}. Só os 12 selecionados serão incluídos no jogo.</p>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
                     <p className="muted text-[10px]">A lista pública apresenta nomes e tempos de jogo; não inclui datas de nascimento nem fotografias.</p>
-                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length !== 12 || rosterPlayers.length < 12}>
+                    <button className="btn btn-primary w-full !py-3 text-sm sm:w-auto" disabled={saving || selectedPlayerIds.length !== 12 || visibleRosterCount < 12}>
                       <Trophy size={15} />{saving ? "A criar jogo…" : "Criar jogo e abrir cronómetro"}
                     </button>
                   </div>
@@ -440,7 +526,7 @@ export default function LiveMatchManagementPage() {
                   </button>
                 </div>
                 {matches.length === 0 ? (
-                  <p className="muted text-xs">Ainda não existem jogos criados nesta área.</p>
+                  <p className="muted text-xs">Não existem jogos agendados disponíveis. Os jogos iniciados deixam de aparecer nesta lista.</p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {matches.map((match) => (
