@@ -2,7 +2,7 @@
 
 ## 1. Supabase
 1. Create a Supabase project on the free plan.
-2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql`, `0004_public_match_sharing.sql` and `0005_live_player_time_tracking.sql`.
+2. Open SQL Editor and run the migrations in order: `0001_initial_schema.sql`, `0002_event_moment_and_outcome.sql`, then `0003_team_event_association.sql`, `0004_public_match_sharing.sql`, `0005_live_player_time_tracking.sql`, `0006_public_live_match_access.sql` and `0007_live_player_display_names.sql`.
 3. In Authentication settings, configure the allowed site URL and email confirmation policy.
 4. Copy the Project URL and publishable key. Do not expose a service-role key in browser code.
 
