@@ -46,9 +46,16 @@ begin
   -- Remove the automatic history row when no video has been attached yet.
   -- If a video is already linked, preserve that analysis and its events;
   -- the source FK will be cleared by ON DELETE SET NULL.
-  delete from public.matches
-  where source_public_live_match_id = p_match_id
-    and youtube_url is null;
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'matches'
+      and column_name = 'source_public_live_match_id'
+  ) then
+    execute 'delete from public.matches where source_public_live_match_id = $1 and youtube_url is null'
+      using p_match_id;
+  end if;
 
   delete from public.public_live_matches
   where id = p_match_id;
