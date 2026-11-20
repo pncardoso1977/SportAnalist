@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type F
 import Link from "next/link";
 import {
   ArrowLeft, CheckCircle2, Clock3, Copy, ExternalLink, MapPin, Pause,
-  Play, RefreshCw, Share2, Timer, Trophy, Users, X,
+  Pencil, Play, RefreshCw, Share2, Timer, Trophy, Users, X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { getClockSnapshot, getServerClockSnapshot, subscribeToClock } from "@/lib/clock-store";
@@ -28,7 +28,7 @@ const INITIAL_FIXTURE = {
   venue: "Pavilhão Externato Marista Lisboa",
 };
 
-type LivePlayer = SquadPlayer & { active: boolean };
+type LivePlayer = SquadPlayer & { active: boolean; display_name: string };
 type PublicMatchData = {
   match: LiveMatch;
   clock: LiveClock;
@@ -57,6 +57,7 @@ export default function LiveMatchManagementPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
+  const [editingNames, setEditingNames] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [competition, setCompetition] = useState(INITIAL_FIXTURE.competition);
@@ -93,6 +94,7 @@ export default function LiveMatchManagementPage() {
       setClock(result.clock);
       setPlayers(result.players ?? []);
       setStints(result.stints ?? []);
+      setEditingNames(true);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -203,6 +205,36 @@ export default function LiveMatchManagementPage() {
     }
   }
 
+  async function savePlayerDisplayName(player: LivePlayer) {
+    if (!supabase || !activeMatch) return;
+    const displayName = player.display_name.trim();
+    if (!displayName || displayName.length > 40) {
+      setError("O nome apresentado deve ter entre 1 e 40 caracteres.");
+      await loadMatchData(activeMatch.id);
+      return;
+    }
+    if (displayName === player.full_name) {
+      // Keep the user's explicit short form even when it is different from
+      // the player's registry name.
+    }
+    setBusyPlayerId(player.id);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("set_public_live_player_name", {
+        p_match_id: activeMatch.id,
+        p_player_id: player.id,
+        p_display_name: displayName,
+      });
+      if (rpcError) throw rpcError;
+      setMessage("Nome atualizado.");
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+      await loadMatchData(activeMatch.id);
+    } finally {
+      setBusyPlayerId(null);
+    }
+  }
+
   async function copyPublicLink() {
     if (!publicUrl) return;
     try {
@@ -229,18 +261,18 @@ export default function LiveMatchManagementPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-3 py-4 sm:px-5 sm:py-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <main className={`mx-auto flex w-full max-w-5xl flex-col gap-2 px-2 py-2 sm:px-5 sm:py-3 ${activeMatch ? "h-[100svh] overflow-hidden" : "min-h-screen"}`}>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#35d07f1c] text-[#35d07f]">
-            <Timer size={24} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#35d07f1c] text-[#35d07f]">
+            <Timer size={20} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold">Jogo ao vivo · Sub-17</h1>
-            <p className="muted text-xs">Área pública · sem necessidade de conta ou autenticação</p>
+            <h1 className="text-base font-bold">Jogo ao vivo · Sub-17</h1>
+            <p className="muted text-[10px]">Área pública · sem autenticação</p>
           </div>
         </div>
-        <Link href="/" className="btn !px-3 !py-2 text-xs"><ArrowLeft size={14} />SportAnalist</Link>
+        <Link href="/" className="btn !px-2 !py-1.5 text-[10px]"><ArrowLeft size={14} />SportAnalist</Link>
       </header>
 
       {!supabase ? (
@@ -326,8 +358,8 @@ export default function LiveMatchManagementPage() {
           )}
 
           {activeMatch && (
-            <section className="grid gap-3">
-              <section className="panel grid gap-3 p-3 sm:p-4">
+            <section className="grid min-h-0 flex-1 gap-2">
+              <section className="panel grid shrink-0 gap-2 p-2 sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-[#75e8a4]">{activeMatch.competition}</p>
@@ -345,84 +377,86 @@ export default function LiveMatchManagementPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-[#315a45] bg-[#0b1e16] p-4 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-[.15em] text-[#8ee8ae]">Tempo de jogo</p>
-                  <p className="mt-1 font-mono text-5xl font-bold tabular-nums tracking-tight text-white sm:text-6xl">{formatDuration(elapsedSeconds)}</p>
-                  <p className="mt-2 text-[10px] text-[#a7c6b3]">
-                    {clock?.status === "running" ? "Cronómetro a contar" :
-                      clock?.status === "finished" ? "Jogo terminado" :
-                      clock?.status === "paused" ? "Cronómetro em pausa" : "Pronto a iniciar"}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {clock?.status === "running" ? (
-                    <button type="button" className="btn !py-3 text-sm" disabled={saving} onClick={() => void controlClock("pause")}>
-                      <Pause size={16} />Pausar
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                  <div className="rounded-xl border border-[#315a45] bg-[#0b1e16] px-3 py-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-[.12em] text-[#8ee8ae]">Tempo de jogo</p>
+                    <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">{formatDuration(elapsedSeconds)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {clock?.status === "running" ? (
+                      <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving} onClick={() => void controlClock("pause")}>
+                        <Pause size={13} />Pausar
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-primary !min-h-10 !px-2 !py-2 text-[10px]" disabled={saving || clock?.status === "finished"} onClick={() => void controlClock("start")}>
+                        <Play size={13} />{clock?.status === "paused" ? "Retomar" : "Iniciar"}
+                      </button>
+                    )}
+                    <button type="button" className="btn !min-h-10 !px-2 !py-2 text-[10px] text-rose-200" disabled={saving || clock?.status === "finished"} onClick={() => {
+                      if (window.confirm("Terminar o jogo e fechar todos os tempos em campo?")) void controlClock("finish");
+                    }}>
+                      <CheckCircle2 size={13} />Terminar
                     </button>
-                  ) : (
-                    <button type="button" className="btn btn-primary !py-3 text-sm" disabled={saving || clock?.status === "finished"} onClick={() => void controlClock("start")}>
-                      <Play size={16} />{clock?.status === "paused" ? "Retomar" : "Iniciar jogo"}
-                    </button>
-                  )}
-                  <button type="button" className="btn !py-3 text-sm text-rose-200" disabled={saving || clock?.status === "finished"} onClick={() => {
-                    if (window.confirm("Terminar o jogo e fechar todos os tempos em campo?")) void controlClock("finish");
-                  }}>
-                    <CheckCircle2 size={16} />Terminar
-                  </button>
-                  <span className="muted col-span-2 flex items-center justify-center text-[10px] sm:col-span-1">
-                    {onCourtCount}/5 jogadores em campo
-                  </span>
+                    <span className="col-span-2 text-center text-[9px] text-[#a7c6b3]">{onCourtCount}/5 em campo · {clock?.status === "running" ? "A contar" : clock?.status === "finished" ? "Terminado" : clock?.status === "paused" ? "Em pausa" : "Pronto"}</span>
+                  </div>
                 </div>
               </section>
 
-              <section className="panel grid gap-3 p-3 sm:p-4">
+              <section className="panel grid min-h-0 flex-1 content-start gap-1.5 p-2 sm:p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-semibold">Jogadores em campo</h2>
-                    <p className="muted mt-0.5 text-[10px]">Toca em Entrar ou Sair para registar cada substituição.</p>
+                  <div className="min-w-0">
+                    <h2 className="text-xs font-semibold">Plantel · minutos em campo</h2>
+                    <p className="muted text-[9px]">{onCourtCount}/5 em campo · nomes editáveis</p>
                   </div>
-                  <span className="rounded-full border border-[#315b47] bg-[#112820] px-2.5 py-1 text-[10px] text-[#79e9aa]">{onCourtCount} / 5</span>
+                  <button type="button" className="btn !min-h-8 !px-2 !py-1 text-[9px]" onClick={() => setEditingNames((current) => !current)}>
+                    <Pencil size={11} />{editingNames ? "Concluir nomes" : "Editar nomes"}
+                  </button>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
                   {players.map((player) => {
                     const activeStint = stints.some((stint) => stint.player_id === player.id && stint.ended_second === null);
                     const totalSeconds = playerCourtSeconds(stints, player.id, elapsedSeconds);
                     const disablingEntry = !activeStint && onCourtCount >= 5;
                     return (
-                      <div key={player.id} className={`flex min-w-0 items-center gap-2 rounded-xl border p-2.5 ${activeStint ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
-                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${activeStint ? "bg-[#35d07f] text-[#062012]" : "bg-[#1b2a38] text-[#9eb0c0]"}`}>
-                          <Users size={15} />
+                      <div key={player.id} className={`min-w-0 rounded-lg border px-1.5 py-1 ${activeStint ? "border-[#3c8b60] bg-[#10291c]" : "border-[#263646] bg-[#0b131c]"}`}>
+                        {editingNames ? (
+                          <input
+                            aria-label={`Nome curto de ${player.full_name}`}
+                            className="w-full min-w-0 truncate border-0 bg-transparent p-0 text-[10px] font-semibold leading-4 text-white outline-none placeholder:text-[#708497] focus:ring-0"
+                            value={player.display_name}
+                            maxLength={40}
+                            onChange={(event) => setPlayers((current) => current.map((item) =>
+                              item.id === player.id ? { ...item, display_name: event.target.value } : item
+                            ))}
+                            onBlur={() => void savePlayerDisplayName(player)}
+                            onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                          />
+                        ) : (
+                          <p className="truncate text-[10px] font-semibold leading-4" title={player.full_name}>{player.display_name}</p>
+                        )}
+                        <div className="mt-1 flex items-center justify-between gap-1">
+                          <span className="flex min-w-0 items-center gap-0.5 font-mono text-[9px] text-[#a8b8c7]">
+                            <Clock3 size={10} />{formatDuration(totalSeconds)}
+                          </span>
+                          <button type="button"
+                            className={`min-h-7 min-w-[42px] rounded-md px-1.5 text-[9px] font-bold ${activeStint ? "bg-[#39201b] text-[#ffb39d]" : "bg-[#112820] text-[#79e9aa]"}`}
+                            disabled={saving || busyPlayerId !== null || clock?.status === "finished" || disablingEntry}
+                            onClick={() => void togglePlayer(player, activeStint)}>
+                            {busyPlayerId === player.id ? "…" : activeStint ? "Sair" : "Entrar"}
+                          </button>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-xs font-semibold leading-snug">{player.full_name}</p>
-                          <p className="muted mt-1 flex items-center gap-1 font-mono text-[10px]">
-                            <Clock3 size={11} />{formatDuration(totalSeconds)}
-                            {activeStint && <span className="ml-1 text-[#79e9aa]">· Em campo</span>}
-                          </p>
-                        </div>
-                        <button type="button"
-                          className={`min-h-11 min-w-[76px] rounded-lg px-3 text-xs font-bold ${activeStint ? "border border-[#9a5b4d] bg-[#39201b] text-[#ffb39d]" : "border border-[#315b47] bg-[#112820] text-[#79e9aa]"}`}
-                          disabled={saving || busyPlayerId !== null || clock?.status === "finished" || disablingEntry}
-                          onClick={() => void togglePlayer(player, activeStint)}>
-                          {busyPlayerId === player.id ? "…" : activeStint ? "Sair" : "Entrar"}
-                        </button>
                       </div>
                     );
                   })}
                 </div>
-                <p className="muted text-[10px]">O máximo de cinco jogadores em campo é validado pela base de dados. A pausa do cronómetro interrompe a contagem sem retirar os jogadores.</p>
               </section>
 
-              <section className="panel grid gap-2 p-3 sm:p-4">
-                <div className="flex items-center gap-2"><Share2 size={17} className="text-[#79e9aa]" /><h2 className="text-sm font-semibold">Página pública do jogo</h2></div>
-                <p className="muted text-[10px]">Esta ficha é pública e pode ser consultada por qualquer pessoa. O mesmo link abre uma página de consulta sem os controlos de operação.</p>
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-                  <input className="field min-w-0 flex-1 text-xs" value={publicUrl} readOnly aria-label="Link público do jogo" />
-                  <button type="button" className="btn btn-primary !py-2 text-xs" onClick={() => void copyPublicLink()}><Copy size={13} />Copiar link</button>
-                  <a href={publicUrl} target="_blank" rel="noreferrer" className="btn !py-2 text-xs"><ExternalLink size={13} />Abrir</a>
-                </div>
-              </section>
+              <div className="flex shrink-0 items-center gap-1.5 border-t border-[#263646] pt-1.5">
+                <Share2 size={12} className="shrink-0 text-[#79e9aa]" />
+                <input className="field min-w-0 flex-1 !py-1 text-[9px]" value={publicUrl} readOnly aria-label="Link público do jogo" />
+                <button type="button" className="btn !min-h-7 !px-2 !py-1 text-[9px]" onClick={() => void copyPublicLink()}><Copy size={11} />Copiar</button>
+                <a href={publicUrl} target="_blank" rel="noreferrer" className="btn !min-h-7 !px-2 !py-1 text-[9px]"><ExternalLink size={11} /></a>
+              </div>
             </section>
           )}
         </>
@@ -432,7 +466,7 @@ export default function LiveMatchManagementPage() {
       {error && <p role="alert" className="rounded-lg border border-rose-900 bg-rose-950/40 p-3 text-xs text-rose-200">{error}</p>}
       {message && <div role="status" className="flex items-center justify-between gap-2 rounded-lg border border-[#315b47] bg-[#112820] p-3 text-xs text-[#9aeab6]">{message}<button type="button" onClick={() => setMessage("")} aria-label="Fechar mensagem"><X size={13} /></button></div>}
 
-      <footer className="muted mt-auto border-t border-[#263646] pt-3 text-center text-[10px]">
+      <footer className={`muted mt-auto border-t border-[#263646] pt-2 text-center text-[9px] ${activeMatch ? "hidden" : ""}`}>
         SportAnalist · Área pública de jogo ao vivo · Sem autenticação
       </footer>
     </main>
