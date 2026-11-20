@@ -19,12 +19,11 @@ import {
 
 const INITIAL_FIXTURE = {
   competition: "CD II DIVISÃO | SUB 17 FUTSAL",
-  roundLabel: "Jornada 7",
-  analysedTeam: "Associação Marista",
-  opponent: "Portela",
-  matchDate: "2026-11-21",
-  kickoffTime: "17:00",
-  venue: "Pavilhão Externato Marista Lisboa",
+  roundLabel: "",
+  opponent: "",
+  matchDate: "",
+  kickoffTime: "",
+  venue: "",
 };
 
 type LivePlayer = {
@@ -67,7 +66,7 @@ export default function LiveMatchManagementPage() {
   const [error, setError] = useState("");
   const [competition, setCompetition] = useState(INITIAL_FIXTURE.competition);
   const [roundLabel, setRoundLabel] = useState(INITIAL_FIXTURE.roundLabel);
-  const [analysedTeam, setAnalysedTeam] = useState(INITIAL_FIXTURE.analysedTeam);
+  const analysedTeam = "AMPortela";
   const [opponent, setOpponent] = useState(INITIAL_FIXTURE.opponent);
   const [matchDate, setMatchDate] = useState(INITIAL_FIXTURE.matchDate);
   const [kickoffTime, setKickoffTime] = useState(INITIAL_FIXTURE.kickoffTime);
@@ -76,6 +75,7 @@ export default function LiveMatchManagementPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
 
   const isPortelaSenior = competition.trim().toUpperCase() === "CD II DIV SENIORES MASCULINOS";
+  const isJuniores = competition.trim().toUpperCase() === "CD II DIVISÃO | SUB 19 FUTSAL";
 
   const elapsedSeconds = liveElapsedSeconds(clock, now);
   const onCourtCount = stints.filter((stint) => stint.ended_second === null).length;
@@ -124,8 +124,8 @@ export default function LiveMatchManagementPage() {
         if (cancelled) return;
         const roster = Array.isArray(data) ? data as LivePlayer[] : [];
         setRosterPlayers(roster);
-        // The Sub-17 roster has exactly twelve players; preselect that complete squad.
-        // Portela seniors has more options, so the operator chooses the twelve for each fixture.
+        // The Juvenis roster has exactly twelve players; preselect that complete squad.
+        // Senior and Junior squads have more options, so choose twelve for each fixture.
         setSelectedPlayerIds(roster.length === 12 ? roster.map((player) => player.id) : []);
       } catch (rosterError) {
         if (!cancelled) {
@@ -323,23 +323,17 @@ export default function LiveMatchManagementPage() {
                         // Clear the previous competition's roster immediately while the new one loads.
                         setRosterPlayers([]);
                         setSelectedPlayerIds([]);
-                        if (value === "CD II DIV SENIORES MASCULINOS") {
-                          setAnalysedTeam("Portela");
-                          setOpponent("");
-                        } else {
-                          setAnalysedTeam("Associação Marista");
-                          setOpponent("Portela");
-                        }
                       }}
                       required
                     >
-                      <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL</option>
+                      <option value="CD II DIVISÃO | SUB 17 FUTSAL">CD II DIVISÃO | SUB 17 FUTSAL · Juvenis</option>
+                      <option value="CD II DIVISÃO | SUB 19 FUTSAL">CD II DIVISÃO | SUB 19 FUTSAL · Juniores</option>
                       <option value="CD II DIV SENIORES MASCULINOS">CD II DIV SENIORES MASCULINOS</option>
                     </select>
                   </label>
                   <label className="text-xs text-[#a8b8c7]">
                     Equipa analisada
-                    <input className="field mt-1" value={analysedTeam} onChange={(event) => setAnalysedTeam(event.target.value)} required maxLength={100} />
+                    <input className="field mt-1" value={analysedTeam} readOnly aria-readonly="true" />
                   </label>
                   <label className="text-xs text-[#a8b8c7]">
                     Adversário
@@ -368,7 +362,11 @@ export default function LiveMatchManagementPage() {
                       <div>
                         <p className="text-xs font-semibold text-white">Convocatória · selecionar 12 jogadores</p>
                         <p className="muted text-[10px]">
-                          {isPortelaSenior ? "Plantel Portela · Seniores Masculinos" : "Plantel Associação Marista · Sub-17"}
+                          {isPortelaSenior
+                            ? "Plantel AMPortela · Seniores Masculinos"
+                            : isJuniores
+                              ? "Plantel AMPortela · Juniores Sub-19"
+                              : "Plantel AMPortela · Juvenis Sub-17"}
                         </p>
                       </div>
                       <span className={`rounded-md px-2 py-1 text-[10px] font-bold ${selectedPlayerIds.length === 12 ? "bg-[#123d28] text-[#91efb0]" : "bg-[#432d16] text-[#ffd08a]"}`}>
@@ -398,7 +396,7 @@ export default function LiveMatchManagementPage() {
                       })}
                     </div>
                     {rosterPlayers.length === 0 ? (
-                      <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0009.</p>
+                      <p className="text-[10px] text-amber-300">Não foi possível carregar o plantel. Confirma se executaste a migração 0010.</p>
                     ) : (
                       <p className="muted text-[10px]">Disponíveis: {rosterPlayers.length}. Só os 12 selecionados serão incluídos no jogo.</p>
                     )}
