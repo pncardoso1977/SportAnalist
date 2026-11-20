@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import {
-  ArrowLeft, CalendarDays, CheckCircle2, Clock3, Copy, ExternalLink, MapPin,
-  Pause, Play, RefreshCw, Share2, ShieldAlert, Timer, Trophy, Users, X,
+  ArrowLeft, CheckCircle2, Clock3, Copy, ExternalLink, MapPin,
+  Pause, Play, RefreshCw, Share2, Timer, Trophy, Users, X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { getClockSnapshot, getServerClockSnapshot, subscribeToClock } from "@/lib/clock-store";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
 import {
@@ -51,7 +52,7 @@ export default function LiveMatchManagementPage() {
   const [clock, setClock] = useState<LiveClock | null>(null);
   const [stints, setStints] = useState<PlayerStint[]>([]);
   const [shareToken, setShareToken] = useState<string | null>(null);
-  const [now, setNow] = useState(0);
+  const now = useSyncExternalStore(subscribeToClock, getClockSnapshot, getServerClockSnapshot);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyPlayerId, setBusyPlayerId] = useState<string | null>(null);
@@ -124,11 +125,6 @@ export default function LiveMatchManagementPage() {
       setLoading(false);
     }
   }, [supabase]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (!supabase || !projectId || !canEdit) return;
