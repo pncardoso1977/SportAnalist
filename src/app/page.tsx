@@ -1085,15 +1085,15 @@ export default function HomePage() {
             {matchesSyncError && <p role="alert" className="mb-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] leading-relaxed text-amber-200">{matchesSyncError}</p>}
             {matches.length === 0 ? <p className="muted py-2 text-xs">{t.noMatches}</p> : <div className="scrollbar flex flex-col gap-1.5 overflow-y-auto">
               {matches.map((match) => {
-                const opposingTeam = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
                 return <div key={match.id} className={`rounded-lg border p-2 ${cloudMatchId === match.id ? "border-[#35d07f80] bg-[#35d07f0e]" : "border-[#263646] bg-[#0b131c]"}`}>
-                  <button className="block w-full text-left" onClick={() => openSavedMatch(match)} title={t.openMatch}>
-                    <p className="truncate text-xs font-semibold">{match.analyzed_team} <span className="muted font-normal">vs</span> {opposingTeam}</p>
+                  <button className="block w-full text-left" onClick={() => void openSavedMatch(match)} title={t.openMatch}>
+                    <p className="truncate text-xs font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
                     <p className="muted mt-1 text-[10px]">
-                      {match.competition ? `${match.competition} · ` : ""}
-                      {new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "short" }).format(new Date(match.played_at ?? match.created_at))}
-                      {match.kickoff_time ? ` · ${match.kickoff_time.slice(0, 5)}` : ""}
+                      {[match.age_group, match.competition].filter(Boolean).join(" · ")}
+                      {[match.played_at ? new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "short" }).format(new Date(match.played_at)) : null, match.kickoff_time ? match.kickoff_time.slice(0, 5) : null].filter(Boolean).join(" · ")}
                     </p>
+                    {match.venue && <p className="muted mt-1 truncate text-[10px]">{match.venue}</p>}
+                    <p className="muted mt-1 text-[9px]">{language === "pt" ? "Equipa analisada:" : "Analysed team:"} {match.analyzed_team} · {match.home_team === match.analyzed_team ? (language === "pt" ? "Casa" : "Home") : (language === "pt" ? "Fora" : "Away")}</p>
                     {match.source_public_live_match_id && <p className="mt-1 text-[9px] font-semibold text-[#83e6a9]">{language === "pt" ? "Jogo ao vivo · Terminado" : "Live match · Finished"}</p>}
                   </button>
                   <div className="mt-1 flex items-center justify-between gap-2">
