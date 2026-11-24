@@ -993,19 +993,80 @@ export default function HomePage() {
           {(!supabase || projectId) && <>
             <section className="grid gap-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{isAttachingLiveVideo ? (language === "pt" ? "Associar vídeo ao jogo selecionado" : "Attach video to selected match") : t.newMatch}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">
+                  {isAddingVideosToExistingMatch
+                    ? (language === "pt" ? "Adicionar vídeos ao jogo selecionado" : "Add videos to selected match")
+                    : t.newMatch}
+                </h3>
                 {cloudMatchId && <button type="button" className="rounded border border-[#31475a] px-2 py-1 text-[10px] text-[#b9d0df]" onClick={startNewMatch}>{language === "pt" ? "Novo jogo" : "New match"}</button>}
               </div>
-              <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.analyzed}
-                <input className="field mt-1 !px-2.5 !py-2 text-xs" value={team} onChange={(e) => setTeam(e.target.value)} />
-              </label>
-              <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.opponent}
-                <input className="field mt-1 !px-2.5 !py-2 text-xs" value={opponent} onChange={(e) => setOpponent(e.target.value)} />
-              </label>
-              <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.youtube}
-                <input className="field mt-1 !px-2.5 !py-2 text-xs" placeholder="youtube.com/watch?v=…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-              </label>
-              <button className="btn btn-primary w-full !py-2 text-xs" disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"} onClick={() => void loadVideo()}><Video size={14} />{isAttachingLiveVideo ? (language === "pt" ? "Associar vídeo e iniciar análise" : "Attach video and start analysis") : t.load}</button>
+
+              {isAddingVideosToExistingMatch ? (
+                <div className="rounded-lg border border-[#263646] bg-[#0b131c] p-2 text-[10px] text-[#b8c7d3]">
+                  <p className="font-semibold text-white">{selectedSavedMatch?.home_team} vs {selectedSavedMatch?.away_team}</p>
+                  <p className="mt-1">{[selectedSavedMatch?.age_group, selectedSavedMatch?.competition].filter(Boolean).join(" · ")}</p>
+                  <p className="mt-1">{language === "pt" ? "Os novos links serão associados a este jogo, sem criar outro registo." : "New links will be added to this match without creating another record."}</p>
+                </div>
+              ) : (
+                <>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.analyzed}
+                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={team} onChange={(e) => setTeam(e.target.value)} required />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.opponent}
+                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={opponent} onChange={(e) => setOpponent(e.target.value)} required />
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#31475a] bg-[#0b131c] px-2.5 py-2 text-[11px] font-semibold text-[#c4d1dc]">
+                    <input type="checkbox" className="accent-[#35d07f]" checked={analyzedTeamIsHome} onChange={(e) => setAnalyzedTeamIsHome(e.target.checked)} />
+                    <span>{language === "pt" ? "A equipa analisada joga em casa" : "Analysed team plays at home"}</span>
+                  </label>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
+                    {language === "pt" ? "Escalão *" : "Age group *"}
+                    <input className="field mt-1 !px-2.5 !py-2 text-xs" list="sportanalist-age-groups" value={ageGroup}
+                      onChange={(e) => setAgeGroup(e.target.value)} placeholder={language === "pt" ? "Ex.: Sub-17" : "e.g. U17"} required />
+                    <datalist id="sportanalist-age-groups">{ageGroupOptions.map((item) => <option key={item} value={item} />)}</datalist>
+                  </label>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
+                    {language === "pt" ? "Competição" : "Competition"}
+                    <input className="field mt-1 !px-2.5 !py-2 text-xs" list="sportanalist-competitions" value={competition}
+                      onChange={(e) => setCompetition(e.target.value)} placeholder={language === "pt" ? "Escolhe uma existente ou escreve nova" : "Choose existing or enter new"} required />
+                    <datalist id="sportanalist-competitions">{competitionOptions.map((item) => <option key={item} value={item} />)}</datalist>
+                  </label>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
+                    {language === "pt" ? "Data do jogo" : "Match date"}
+                    <input type="date" className="field mt-1 !px-2.5 !py-2 text-xs" value={playedAt}
+                      onChange={(e) => setPlayedAt(e.target.value)} required />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
+                    {language === "pt" ? "Local do jogo (opcional)" : "Venue (optional)"}
+                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={venue} onChange={(e) => setVenue(e.target.value)}
+                      placeholder={language === "pt" ? "Pavilhão / local" : "Sports hall / venue"} />
+                  </label>
+                </>
+              )}
+
+              <div className="grid gap-1.5">
+                <p className="text-[11px] font-semibold text-[#a8b8c7]">{language === "pt" ? "Links dos vídeos YouTube" : "YouTube video links"}</p>
+                {videoLinks.map((url, index) => (
+                  <div key={index} className="flex min-w-0 items-center gap-1.5">
+                    <input className="field min-w-0 flex-1 !px-2.5 !py-2 text-xs"
+                      placeholder={language === "pt" ? `Vídeo ${index + 1} · youtube.com/watch?v=…` : `Video ${index + 1} · youtube.com/watch?v=…`}
+                      value={url} onChange={(e) => updateVideoLink(index, e.target.value)} />
+                    {videoLinks.length > 1 && <button type="button" className="btn !h-8 !w-8 !p-0 text-rose-300" aria-label={language === "pt" ? "Remover link" : "Remove link"} onClick={() => removeVideoLinkField(index)}><X size={13} /></button>}
+                  </div>
+                ))}
+                <button type="button" className="btn w-full !justify-center !py-1.5 text-[10px]" onClick={addVideoLinkField}>
+                  <Plus size={12} />{language === "pt" ? "Adicionar outro vídeo" : "Add another video"}
+                </button>
+              </div>
+
+              <button className="btn btn-primary w-full !py-2 text-xs"
+                disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"}
+                onClick={() => void loadVideo()}>
+                <Video size={14} />
+                {isAddingVideosToExistingMatch
+                  ? (language === "pt" ? "Adicionar vídeos e carregar" : "Add videos and load")
+                  : (language === "pt" ? "Registar jogo e carregar vídeos" : "Register match and load videos")}
+              </button>
             </section>
           </>}
 
@@ -1076,10 +1137,21 @@ export default function HomePage() {
               {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-[#8798a8]">
                 <Video size={34} strokeWidth={1.2} />
                 <p className="text-sm">{cloudMatchId && matches.find((match) => match.id === cloudMatchId)?.source_public_live_match_id
-                  ? (language === "pt" ? "Jogo ao vivo terminado. Consulta os tempos abaixo e associa um vídeo YouTube para iniciar a análise técnico-tática." : "Live match finished. Review the player times below and attach a YouTube video to begin technical-tactical analysis.")
+                  ? (language === "pt" ? "Jogo ao vivo terminado. Consulta os tempos abaixo e associa vídeos YouTube para iniciar a análise técnico-tática." : "Live match finished. Review the player times below and attach YouTube videos to begin technical-tactical analysis.")
                   : t.videoHelp}</p>
               </div>}
             </div>
+            {matchVideos.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-[#263646] px-2.5 py-2">
+                <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Vídeos do jogo" : "Match videos"}</span>
+                {matchVideos.map((item, index) => (
+                  <button key={item.id} type="button" onClick={() => selectMatchVideo(item.youtube_url)}
+                    className={`rounded-md border px-2 py-1 text-[10px] transition ${loadedUrl === item.youtube_url ? "border-[#35d07f80] bg-[#35d07f18] text-[#83e6a9]" : "border-[#31475a] bg-[#0b131c] text-[#b8c7d3] hover:border-[#5f819e]"}`}>
+                    {language === "pt" ? "Vídeo" : "Video"} {index + 1}
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
 
           {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
@@ -1142,7 +1214,7 @@ export default function HomePage() {
                     <td><button type="button" className="event-time-link font-mono text-[10px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
                     <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>
                       <span>{language === "pt" ? record.event_name_pt : record.event_name_en}</span>
-                      {goalScores.has(record.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(record.id)!)}</span>}
+                      {goalScores.has(record.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(record.id)!, analyzedTeamIsHome)}</span>}
                     </td>
                     <td className="event-moment-cell" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
                     <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
