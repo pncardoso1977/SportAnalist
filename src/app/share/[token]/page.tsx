@@ -11,9 +11,16 @@ type PublicMatch = {
   home_team: string;
   away_team: string;
   analyzed_team: string;
-  youtube_url: string;
+  youtube_url: string | null;
+  age_group?: string | null;
+  competition?: string | null;
+  played_at?: string | null;
+  venue?: string | null;
+  analyzed_team_is_home?: boolean;
   created_at: string;
 };
+
+type PublicMatchVideo = { id: string | null; youtube_url: string; sort_order: number };
 
 type PublicEvent = {
   id: string;
@@ -27,7 +34,7 @@ type PublicEvent = {
   event_name_en: string;
 };
 
-type PublicAnalysis = { match: PublicMatch; events: PublicEvent[] };
+type PublicAnalysis = { match: PublicMatch; videos?: PublicMatchVideo[]; events: PublicEvent[] };
 
 function parseYouTubeId(value: string): string | null {
   try {
@@ -70,6 +77,7 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [selectedSecond, setSelectedSecond] = useState(0);
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState("");
   const [playerVersion, setPlayerVersion] = useState(0);
 
   useEffect(() => {
@@ -90,7 +98,9 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
           ? "Este link não é válido ou a partilha foi desativada pelo editor."
           : "This link is invalid or sharing has been disabled by the editor.");
       } else {
-        setAnalysis(data as PublicAnalysis);
+        const result = data as PublicAnalysis;
+        setAnalysis(result);
+        setSelectedVideoUrl(result.videos?.[0]?.youtube_url ?? result.match.youtube_url ?? "");
       }
       setLoading(false);
     }
@@ -100,7 +110,11 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
 
   const events = analysis?.events ?? [];
   const goalScores = useMemo(() => calculateGoalScores(events), [events]);
-  const videoId = analysis ? parseYouTubeId(analysis.match.youtube_url) : null;
+  const matchVideos = analysis?.videos?.length
+    ? analysis.videos
+    : analysis?.match.youtube_url ? [{ id: null, youtube_url: analysis.match.youtube_url, sort_order: 0 }] : [];
+  const activeVideoUrl = selectedVideoUrl || matchVideos[0]?.youtube_url || "";
+  const videoId = parseYouTubeId(activeVideoUrl);
   const opponent = analysis
     ? analysis.match.home_team === analysis.match.analyzed_team
       ? analysis.match.away_team
@@ -112,7 +126,16 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
     ? `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&start=${selectedSecond}${playerVersion > 0 ? "&autoplay=1" : ""}`
     : "";
 
+  function selectPublicVideo(url: string) {
+    setSelectedVideoUrl(url);
+    setSelectedSecond(0);
+    setPlayerVersion((current) => current + 1);
+  }
+
   function seekToEvent(event: PublicEvent) {
+    if (event.youtube_url && parseYouTubeId(event.youtube_url)) {
+      setSelectedVideoUrl(event.youtube_url);
+    }
     setSelectedSecond(event.video_second);
     setPlayerVersion((current) => current + 1);
   }
@@ -188,13 +211,18 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
           <section className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold tracking-tight">
-                {analysis.match.analyzed_team} <span className="muted font-normal">vs</span> {opponent}
+                {analysis.match.home_team} <span className="muted font-normal">vs</span> {analysis.match.away_team}
               </h2>
               <p className="muted mt-1 text-xs">
-                {new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium" }).format(new Date(analysis.match.created_at))}
+                {[analysis.match.age_group, analysis.match.competition].filter(Boolean).join(" · ")}
+                {analysis.match.played_at
+                  ? ` · ${new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium" }).format(new Date(`${analysis.match.played_at}T12:00:00`))}`
+                  : ""}
               </p>
+              {analysis.match.venue && <p className="muted mt-1 text-xs">{analysis.match.venue}</p>}
+              <p className="muted mt-1 text-[10px]">{language === "pt" ? "Equipa analisada:" : "Analysed team:"} {analysis.match.analyzed_team} · {analysis.match.analyzed_team_is_home === false ? (language === "pt" ? "Fora" : "Away") : (language === "pt" ? "Casa" : "Home")}</p>
             </div>
-            <a className="btn !px-3 !py-2 text-xs" href={analysis.match.youtube_url} target="_blank" rel="noreferrer">
+            <a className="btn !px-3 !py-2 text-xs" href={activeVideoUrl || "#"} target="_blank" rel="noreferrer">
               <ExternalLink size={13} />{text.openVideo}
             </a>
           </section>
@@ -220,6 +248,17 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
                 </div>
               ) : (
                 <div className="video-stage flex items-center justify-center p-6 text-center text-sm text-[#9eb0c0]">{text.noVideo}</div>
+              )}
+              {matchVideos.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-[#263646] px-2.5 py-2">
+                  {matchVideos.map((video, index) => (
+                    <button key={video.id ?? video.youtube_url} type="button"
+                      onClick={() => selectPublicVideo(video.youtube_url)}
+                      className={`rounded-md border px-2 py-1 text-[10px] ${parseYouTubeId(activeVideoUrl) === parseYouTubeId(video.youtube_url) ? "border-[#35d07f80] bg-[#35d07f18] text-[#83e6a9]" : "border-[#31475a] text-[#b8c7d3]"}`}>
+                      {language === "pt" ? "Vídeo" : "Video"} {index + 1}
+                    </button>
+                  ))}
+                </div>
               )}
             </section>
 
@@ -267,7 +306,7 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
                       </div>
                       <p className="mt-1 break-words text-xs font-semibold">
                         <span>{eventName(event, language)}</span>
-                        {goalScores.has(event.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(event.id)!)}</span>}
+                        {goalScores.has(event.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(event.id)!, analysis.match.analyzed_team_is_home !== false)}</span>}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[9px]">
                         <span className={event.moment === "attack"
