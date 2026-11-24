@@ -594,44 +594,142 @@ export default function HomePage() {
     setImportedLiveLoading(false);
   }
 
+  function updateVideoLink(index: number, value: string) {
+    setVideoLinks((current) => current.map((link, linkIndex) => linkIndex === index ? value : link));
+  }
+
+  function addVideoLinkField() {
+    setVideoLinks((current) => [...current, ""]);
+  }
+
+  function removeVideoLinkField(index: number) {
+    setVideoLinks((current) => current.length <= 1 ? [""] : current.filter((_, linkIndex) => linkIndex !== index));
+  }
+
+  function selectMatchVideo(url: string) {
+    const id = parseYouTubeId(url);
+    if (!id) {
+      setMessage(t.linkBad);
+      return;
+    }
+    setAiCandidates([]);
+    setAiConsent(false);
+    setAiError("");
+    setAiStatus("");
+    setLoadedUrl(url);
+    setVideoId(id);
+    setCurrentSecond(0);
+    setMessage(language === "pt" ? "Vídeo selecionado. Os novos eventos ficam associados a este vídeo." : "Video selected. New events will be associated with this video.");
+  }
+
   async function loadVideo() {
     setAiCandidates([]);
     setAiConsent(false);
     setAiError("");
     setAiStatus("");
-    const id = parseYouTubeId(videoUrl);
-    if (!id) { setMessage(t.linkBad); return; }
+
+    const submittedUrls = videoLinks.map((url) => url.trim()).filter(Boolean);
+    const uniqueVideoUrls = Array.from(new Map(
+      submittedUrls.map((url) => [parseYouTubeId(url), url] as const)
+    ).values());
+
+    if (!uniqueVideoUrls.length || uniqueVideoUrls.some((url) => !parseYouTubeId(url))) {
+      setMessage(t.linkBad);
+      return;
+    }
+    if (!team.trim() || !opponent.trim() || team.trim().toLocaleLowerCase() === opponent.trim().toLocaleLowerCase()) {
+      setMessage(language === "pt" ? "Indica duas equipas diferentes." : "Enter two different teams.");
+      return;
+    }
+
+    const existingMatch = selectedSavedMatch;
+    if (!existingMatch && (!ageGroup.trim() || !competition.trim() || !playedAt)) {
+      setMessage(language === "pt"
+        ? "Preenche o escalão, a competição e a data do jogo."
+        : "Enter the age group, competition and match date.");
+      return;
+    }
+
+    let targetMatch: Match | null = existingMatch;
+    let activeVideoUrl = uniqueVideoUrls[0];
+
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
-      const selectedMatch = matches.find((match) => match.id === cloudMatchId);
-      let savedMatch: Match | null = null;
-      if (selectedMatch?.source_public_live_match_id && !selectedMatch.youtube_url) {
-        const { data: updated, error } = await supabase.from("matches")
-          .update({ youtube_url: videoUrl.trim() })
-          .eq("id", selectedMatch.id).select("*").single();
-        if (error || !updated) { setMessage(error?.message ?? t.saveError); return; }
-        savedMatch = updated as Match;
-      } else {
-        const { data: existing, error: lookupError } = await supabase.from("matches")
-          .select("*")
-          .eq("project_id", projectId).eq("home_team", team).eq("away_team", opponent)
-          .eq("youtube_url", videoUrl.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-        if (lookupError) { setMessage(lookupError.message); return; }
-        savedMatch = existing as Match | null;
-        if (!savedMatch) {
-          const { data: created, error } = await supabase.from("matches").insert({
-            project_id: projectId, home_team: team, away_team: opponent, analyzed_team: team,
-            youtube_url: videoUrl.trim(), created_by: cloudUserId,
-          }).select("*").single();
-          if (error || !created) { setMessage(error?.message ?? t.saveError); return; }
-          savedMatch = created as Match;
-        }
+
+      // Detect the migration before creating a match, so a missing table does not
+      // leave a partially registered fixture behind.
+      const { error: videosTableError } = await supabase.from("match_videos").select("id").limit(1);
+      if (videosTableError) {
+        setMessage(language === "pt"
+          ? "A base de dados ainda não tem suporte para vários vídeos. Executa a migração SQL 0025."
+          : "Multiple-video support is not installed in the database. Apply SQL migration 0025.");
+        return;
       }
-      setMatches((current) => [savedMatch!, ...current.filter((match) => match.id !== savedMatch!.id)]);
-      setCloudMatchId(savedMatch.id);
-      setImportedLiveData(selectedMatch?.source_public_live_match_id ? importedLiveData : null);
-      setRecords([]);
-      void loadShareForMatch(savedMatch.id);
+
+      if (!targetMatch) {
+        const homeTeam = analyzedTeamIsHome ? team.trim() : opponent.trim();
+        const awayTeam = analyzedTeamIsHome ? opponent.trim() : team.trim();
+        const { data: created, error } = await supabase.from("matches").insert({
+          project_id: projectId,
+          home_team: homeTeam,
+          away_team: awayTeam,
+          analyzed_team: team.trim(),
+          youtube_url: uniqueVideoUrls[0],
+          created_by: cloudUserId,
+          age_group: ageGroup.trim(),
+          competition: competition.trim(),
+          played_at: playedAt,
+          venue: venue.trim() || null,
+        }).select("*").single();
+        if (error || !created) {
+          setMessage(error?.message ?? t.saveError);
+          return;
+        }
+        targetMatch = created as Match;
+      } else if (!targetMatch.youtube_url) {
+        const { data: updated, error } = await supabase.from("matches")
+          .update({ youtube_url: uniqueVideoUrls[0] })
+          .eq("id", targetMatch.id)
+          .select("*")
+          .single();
+        if (error || !updated) {
+          setMessage(error?.message ?? t.saveError);
+          return;
+        }
+        targetMatch = updated as Match;
+      }
+
+      const firstSortOrder = existingMatch ? matchVideos.length : 0;
+      const videoRows = uniqueVideoUrls.map((url, index) => ({
+        match_id: targetMatch!.id,
+        youtube_url: url,
+        sort_order: firstSortOrder + index,
+        created_by: cloudUserId,
+      }));
+      const { error: saveVideosError } = await supabase.from("match_videos")
+        .upsert(videoRows, { onConflict: "match_id,youtube_url", ignoreDuplicates: true });
+      if (saveVideosError) {
+        setMessage(language === "pt"
+          ? `O jogo foi guardado, mas não foi possível guardar todos os vídeos: ${saveVideosError.message}`
+          : `The match was saved, but one or more videos could not be saved: ${saveVideosError.message}`);
+        return;
+      }
+
+      const { data: savedVideos, error: readVideosError } = await supabase.from("match_videos")
+        .select("id,match_id,youtube_url,sort_order,created_at")
+        .eq("match_id", targetMatch.id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (readVideosError) {
+        setMessage(readVideosError.message);
+        return;
+      }
+      setMatchVideos((savedVideos ?? []) as MatchVideo[]);
+      setMatches((current) => [targetMatch!, ...current.filter((match) => match.id !== targetMatch!.id)]);
+      setCloudMatchId(targetMatch.id);
+      if (!existingMatch) setRecords([]);
+      setImportedLiveData(existingMatch?.source_public_live_match_id ? importedLiveData : null);
+      void loadShareForMatch(targetMatch.id);
     } else {
       shareRequestRef.current += 1;
       setCloudMatchId(null);
@@ -639,49 +737,89 @@ export default function HomePage() {
       setPublicShareUrl("");
       setShareBusy(false);
       setRecords([]);
+      setMatchVideos(uniqueVideoUrls.map((url, index) => ({
+        id: `demo-video-${index}`, match_id: "demo-match", youtube_url: url, sort_order: index,
+      })));
     }
-    setVideoId(id);
-    setLoadedUrl(videoUrl.trim());
-    setCurrentSecond(0);
-    setMessage(t.loading);
+
+    setVideoLinks([""]);
+    selectMatchVideo(activeVideoUrl);
     setSidebarOpen(false);
   }
 
-  function openSavedMatch(match: Match) {
+  async function openSavedMatch(match: Match) {
     setAiCandidates([]);
     setAiConsent(false);
     setAiError("");
     setAiStatus("");
-    const storedUrl = match.youtube_url ?? "";
-    const id = parseYouTubeId(storedUrl);
-    if (storedUrl && !id) { setMessage(t.linkBad); return; }
-    const opponentName = match.home_team === match.analyzed_team ? match.away_team : match.home_team;
+
+    const isAnalysedHome = match.home_team.trim().toLocaleLowerCase() === match.analyzed_team.trim().toLocaleLowerCase();
+    const opponentName = isAnalysedHome ? match.away_team : match.home_team;
     setTeam(match.analyzed_team);
     setOpponent(opponentName);
-    setVideoUrl(storedUrl);
-    setLoadedUrl(storedUrl);
+    setAnalyzedTeamIsHome(isAnalysedHome);
+    setAgeGroup(match.age_group ?? "");
+    setCompetition(match.competition ?? "");
+    setPlayedAt(match.played_at ?? "");
+    setVenue(match.venue ?? "");
+    setVideoLinks([""]);
     setCloudMatchId(match.id);
     void loadShareForMatch(match.id);
+
+    let savedVideos: MatchVideo[] = [];
+    if (supabase) {
+      const { data, error } = await supabase.from("match_videos")
+        .select("id,match_id,youtube_url,sort_order,created_at")
+        .eq("match_id", match.id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) {
+        setMessage(language === "pt"
+          ? "Não foi possível carregar a lista de vídeos. Confirma que a migração SQL 0025 está aplicada."
+          : "Could not load the video list. Confirm that SQL migration 0025 has been applied.");
+      } else {
+        savedVideos = (data ?? []) as MatchVideo[];
+      }
+    }
+    if (!savedVideos.length && match.youtube_url) {
+      savedVideos = [{
+        id: `legacy-${match.id}`,
+        match_id: match.id,
+        youtube_url: match.youtube_url,
+        sort_order: 0,
+      }];
+    }
+    setMatchVideos(savedVideos);
+    const storedUrl = savedVideos[0]?.youtube_url ?? "";
+    const id = storedUrl ? parseYouTubeId(storedUrl) : null;
+    setLoadedUrl(id ? storedUrl : "");
     setVideoId(id ?? "");
     setCurrentSecond(0);
     setRecords([]);
     setImportedLiveData(null);
     if (match.source_public_live_match_id) void loadImportedLiveData(match.source_public_live_match_id);
     else setImportedLiveLoading(false);
-    if (id && playerRef.current && videoId === id) playerRef.current.seekTo(0, true);
-    setMessage(storedUrl ? t.matchOpened : (language === "pt"
-      ? "Jogo aberto sem vídeo. Os tempos dos jogadores estão disponíveis abaixo; associa um URL do YouTube para iniciar a análise."
-      : "Match opened without video. Player time data is shown below; add a YouTube URL to begin analysis."));
+    setMessage(storedUrl
+      ? t.matchOpened
+      : (language === "pt"
+        ? "Jogo aberto sem vídeo associado. Podes adicionar um ou vários links YouTube."
+        : "Match opened without a video. You can add one or more YouTube links."));
     setSidebarOpen(false);
   }
 
   function startNewMatch() {
     shareRequestRef.current += 1;
     setCloudMatchId(null);
-    setVideoUrl("");
+    setVideoLinks([""]);
+    setMatchVideos([]);
     setLoadedUrl("");
     setVideoId("");
     setCurrentSecond(0);
+    setAnalyzedTeamIsHome(true);
+    setAgeGroup("");
+    setCompetition("");
+    setPlayedAt("");
+    setVenue("");
     setRecords([]);
     setImportedLiveData(null);
     setImportedLiveLoading(false);
