@@ -201,6 +201,7 @@ export default function HomePage() {
   const [importedLiveLoading, setImportedLiveLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const playerRef = useRef<YouTubePlayer | null>(null);
+  const pendingSeekRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
   const t = COPY[language];
@@ -213,7 +214,6 @@ export default function HomePage() {
   const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && loadedUrl && (role === "admin" || role === "analyst"));
   const selectedSavedMatch = matches.find((match) => match.id === cloudMatchId) ?? null;
   const isAddingVideosToExistingMatch = Boolean(selectedSavedMatch);
-  const isAttachingLiveVideo = Boolean(selectedSavedMatch?.source_public_live_match_id && !selectedSavedMatch.youtube_url);
   const competitionOptions = useMemo(() => Array.from(new Set(
     matches.map((match) => match.competition?.trim()).filter((value): value is string => Boolean(value))
   )).sort((a, b) => a.localeCompare(b, "pt-PT")), [matches]);
@@ -349,7 +349,13 @@ export default function HomePage() {
         videoId,
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
         events: {
-          onReady: () => { setMessage(t.loaded); },
+          onReady: () => {
+            if (pendingSeekRef.current !== null) {
+              playerRef.current?.seekTo(pendingSeekRef.current, true);
+              pendingSeekRef.current = null;
+            }
+            setMessage(t.loaded);
+          },
           onStateChange: () => refreshClock(),
           onError: () => setMessage(t.videoUnavailable),
         },
@@ -559,8 +565,23 @@ export default function HomePage() {
   }
 
   function seekToEvent(record: MatchEvent) {
+    const eventUrl = record.youtube_url || loadedUrl;
+    const eventVideoId = parseYouTubeId(eventUrl);
+    if (!eventVideoId) {
+      setMessage(language === "pt" ? "Não foi possível identificar o vídeo deste evento." : "Could not identify the video for this event.");
+      return;
+    }
+    if (eventVideoId !== videoId) {
+      pendingSeekRef.current = record.video_second;
+      setLoadedUrl(eventUrl);
+      setVideoId(eventVideoId);
+      setCurrentSecond(record.video_second);
+      return;
+    }
     if (!playerRef.current) {
-      setMessage(language === "pt" ? "O vídeo ainda não está pronto." : "The video player is not ready yet.");
+      pendingSeekRef.current = record.video_second;
+      setCurrentSecond(record.video_second);
+      setMessage(language === "pt" ? "A preparar o vídeo no momento do evento…" : "Preparing the video at the event timestamp…");
       return;
     }
     playerRef.current.seekTo(record.video_second, true);
@@ -616,6 +637,7 @@ export default function HomePage() {
     setAiConsent(false);
     setAiError("");
     setAiStatus("");
+    pendingSeekRef.current = null;
     setLoadedUrl(url);
     setVideoId(id);
     setCurrentSecond(0);
