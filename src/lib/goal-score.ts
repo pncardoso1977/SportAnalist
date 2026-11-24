@@ -65,8 +65,14 @@ export function calculateGoalScores(
   return scores;
 }
 
-export function formatGoalScore(score: GoalScoreAtEvent): string {
-  return score.scoringMoment === "attack"
-    ? `(${score.analysed}) - ${score.opponent}`
-    : `${score.analysed} - (${score.opponent})`;
+export function formatGoalScore(score: GoalScoreAtEvent, analysedTeamIsHome = true): string {
+  const homeScore = analysedTeamIsHome ? score.analysed : score.opponent;
+  const awayScore = analysedTeamIsHome ? score.opponent : score.analysed;
+  const scoringTeamIsHome = score.scoringMoment === "attack"
+    ? analysedTeamIsHome
+    : !analysedTeamIsHome;
+
+  return scoringTeamIsHome
+    ? `(${homeScore}) - ${awayScore}`
+    : `${homeScore} - (${awayScore})`;
 }
