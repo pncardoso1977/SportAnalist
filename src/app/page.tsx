@@ -6,7 +6,7 @@ import {
   Activity, ArrowDownToLine, CircleHelp, Clock3, Copy, FilePlus2,
   Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
 } from "lucide-react";
-import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type Zone } from "@/lib/types";
+import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type MatchVideo, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
 import { CloudSetup } from "@/components/cloud-setup";
 import type { AppRole } from "@/lib/types";
@@ -160,8 +160,14 @@ export default function HomePage() {
   const [role, setRole] = useState<"admin" | "analyst" | "configurator" | "viewer">("admin");
   const [team, setTeam] = useState("Equipa A");
   const [opponent, setOpponent] = useState("Equipa B");
-  const [videoUrl, setVideoUrl] = useState("");
+  const [videoLinks, setVideoLinks] = useState<string[]>([""]);
+  const [matchVideos, setMatchVideos] = useState<MatchVideo[]>([]);
   const [loadedUrl, setLoadedUrl] = useState("");
+  const [analyzedTeamIsHome, setAnalyzedTeamIsHome] = useState(true);
+  const [ageGroup, setAgeGroup] = useState("");
+  const [competition, setCompetition] = useState("");
+  const [playedAt, setPlayedAt] = useState("");
+  const [venue, setVenue] = useState("");
   const [videoId, setVideoId] = useState("");
   const [currentSecond, setCurrentSecond] = useState(0);
   const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENT_TYPES);
@@ -205,8 +211,15 @@ export default function HomePage() {
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
   const canRecord = hasActiveMatch && Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && loadedUrl && (role === "admin" || role === "analyst"));
-  const isAttachingLiveVideo = Boolean(matches.find((match) => match.id === cloudMatchId)?.source_public_live_match_id
-    && !matches.find((match) => match.id === cloudMatchId)?.youtube_url);
+  const selectedSavedMatch = matches.find((match) => match.id === cloudMatchId) ?? null;
+  const isAddingVideosToExistingMatch = Boolean(selectedSavedMatch);
+  const isAttachingLiveVideo = Boolean(selectedSavedMatch?.source_public_live_match_id && !selectedSavedMatch.youtube_url);
+  const competitionOptions = useMemo(() => Array.from(new Set(
+    matches.map((match) => match.competition?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-PT")), [matches]);
+  const ageGroupOptions = useMemo(() => Array.from(new Set(
+    matches.map((match) => match.age_group?.trim()).filter((value): value is string => Boolean(value))
+  )).sort((a, b) => a.localeCompare(b, "pt-PT")), [matches]);
   const handleWorkspaceReady = useCallback((id: string, userId: string, memberRole: AppRole, teamName?: string) => {
     setProjectId(id); setCloudUserId(userId); setRole(memberRole);
     if (teamName) setTeam(teamName);
