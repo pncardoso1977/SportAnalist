@@ -115,11 +115,6 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
     : analysis?.match.youtube_url ? [{ id: null, youtube_url: analysis.match.youtube_url, sort_order: 0 }] : [];
   const activeVideoUrl = selectedVideoUrl || matchVideos[0]?.youtube_url || "";
   const videoId = parseYouTubeId(activeVideoUrl);
-  const opponent = analysis
-    ? analysis.match.home_team === analysis.match.analyzed_team
-      ? analysis.match.away_team
-      : analysis.match.home_team
-    : "";
   const attacks = events.filter((event) => event.moment === "attack").length;
   const defenses = events.filter((event) => event.moment === "defense").length;
   const embedUrl = videoId
