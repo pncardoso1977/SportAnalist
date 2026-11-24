@@ -41,8 +41,17 @@ export type Match = {
   round_label?: string | null;
   kickoff_time?: string | null;
   venue?: string | null;
+  age_group?: string | null;
   live_status?: "scheduled" | "live" | "finished" | null;
   source_public_live_match_id?: string | null;
+};
+
+export type MatchVideo = {
+  id: string;
+  match_id: string;
+  youtube_url: string;
+  sort_order: number;
+  created_at?: string;
 };
 
 export const DEFAULT_EVENT_TYPES: EventType[] = [
