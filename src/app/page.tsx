@@ -785,6 +785,7 @@ export default function HomePage() {
     setPlayedAt(match.played_at ?? "");
     setVenue(match.venue ?? "");
     setVideoLinks([""]);
+    pendingSeekRef.current = null;
     setCloudMatchId(match.id);
     void loadShareForMatch(match.id);
 
@@ -832,6 +833,7 @@ export default function HomePage() {
   function startNewMatch() {
     shareRequestRef.current += 1;
     setCloudMatchId(null);
+    pendingSeekRef.current = null;
     setVideoLinks([""]);
     setMatchVideos([]);
     setLoadedUrl("");
