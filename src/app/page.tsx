@@ -673,7 +673,7 @@ export default function HomePage() {
     }
 
     let targetMatch: Match | null = existingMatch;
-    let activeVideoUrl = uniqueVideoUrls[0];
+    const activeVideoUrl = uniqueVideoUrls[0];
 
     if (supabase) {
       if (!projectId || !cloudUserId) { setMessage(t.noAuth); return; }
