@@ -1002,160 +1002,47 @@ export default function HomePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden rounded-full border border-[#35d07f40] bg-[#35d07f12] px-3 py-2 text-xs text-[#63e99e] sm:inline-flex"><span className="mr-2 mt-1 h-2 w-2 rounded-full bg-[#35d07f]" />{mode === "cloud" ? "Supabase configurado" : t.demo}</span>
-          {supabase
-            ? <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-3 py-2 text-sm">{t[role]}</span>
-            : <select aria-label={t.role} className="field !w-auto text-sm" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-                <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
-              </select>}
-          <Link href="/jogo-ao-vivo" className="btn !px-3 !py-2 text-xs"><Timer size={15} /><span className="hidden sm:inline">Jogo ao vivo</span><span className="sm:hidden">Ao vivo</span></Link>
+          {supabase && cloudUserId && <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-3 py-2 text-xs">{t[role]}</span>}
+          {!supabase && <select aria-label={t.role} className="field !w-auto text-xs" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+            <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
+          </select>}
           <button className="btn !px-3 !py-2" onClick={() => setLanguage(language === "pt" ? "en" : "pt")}><Globe2 size={15} />{language.toUpperCase()}</button>
         </div>
       </header>
 
       {sidebarOpen && <button aria-label={t.closeMenu} className="fixed inset-0 z-40 bg-black/65" onClick={() => setSidebarOpen(false)} />}
       <div className="flex min-h-0 flex-1 items-start gap-4">
-        <aside aria-hidden={!sidebarOpen} className={`panel scrollbar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(88vw,320px)] flex-col gap-3 overflow-y-auto rounded-none p-3 shadow-2xl transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"}`}>
-          <div className="flex items-center justify-between border-b border-[#263646] pb-2">
-            <div><h2 className="text-sm font-semibold">{t.sideMenu}</h2><p className="muted mt-0.5 text-[10px]">{projectId ? team : t.matchHistory}</p></div>
-            <button className="btn !h-8 !w-8 !p-0 lg:hidden" aria-label="Fechar menu" onClick={() => setSidebarOpen(false)}><X size={15} /></button>
+        <aside aria-hidden={!sidebarOpen} className={`panel fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(88vw,300px)] flex-col gap-2 rounded-none p-3 shadow-2xl transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"}`}>
+          <div className="flex items-center justify-between border-b border-[#263646] pb-3">
+            <div>
+              <h2 className="text-sm font-semibold">SportAnalist</h2>
+              <p className="muted mt-0.5 text-[10px]">{language === "pt" ? "Navegação principal" : "Main navigation"}</p>
+            </div>
+            <button className="btn !h-8 !w-8 !p-0" aria-label={t.closeMenu} onClick={() => setSidebarOpen(false)}><X size={15} /></button>
           </div>
 
-          {supabase && <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} hideAuthenticatedBar />}
+          <button type="button"
+            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-semibold ${workspaceSection === "post-match" ? "border-[#35d07f70] bg-[#35d07f16] text-[#8cebb2]" : "border-transparent text-[#c0ccd7] hover:border-[#31475a] hover:bg-[#172331]"}`}
+            onClick={() => { setWorkspaceSection("post-match"); setPostMatchPage("home"); setSidebarOpen(false); }}>
+            <Activity size={18} />Análise pós Match
+          </button>
+          <Link href="/jogo-ao-vivo" onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-sm font-semibold text-[#c0ccd7] hover:border-[#31475a] hover:bg-[#172331]">
+            <Timer size={18} />Jogo ao Vivo
+          </Link>
+          <button type="button"
+            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-semibold ${workspaceSection === "settings" ? "border-[#35d07f70] bg-[#35d07f16] text-[#8cebb2]" : "border-transparent text-[#c0ccd7] hover:border-[#31475a] hover:bg-[#172331]"}`}
+            onClick={() => { setWorkspaceSection("settings"); setSettingsTab("account"); setSidebarOpen(false); }}>
+            <ShieldCheck size={18} />Configurações
+          </button>
 
-          {supabase && cloudUserId && <div className="flex items-center justify-between rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-2">
-            <div className="min-w-0"><p className="text-xs font-medium">{t[role]}</p><p className="muted truncate text-[10px]">{projectId ? t.currentMatch : "Supabase Auth"}</p></div>
-            <button className="btn !px-2 !py-1.5 text-[11px]" onClick={() => void signOutFromSidebar()}><LogOut size={12} />Sair</button>
-          </div>}
-
-          {(!supabase || projectId) && <>
-            <section className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">
-                  {isAddingVideosToExistingMatch
-                    ? (language === "pt" ? "Adicionar vídeos ao jogo selecionado" : "Add videos to selected match")
-                    : t.newMatch}
-                </h3>
-                {cloudMatchId && <button type="button" className="rounded border border-[#31475a] px-2 py-1 text-[10px] text-[#b9d0df]" onClick={startNewMatch}>{language === "pt" ? "Novo jogo" : "New match"}</button>}
-              </div>
-
-              {isAddingVideosToExistingMatch ? (
-                <div className="rounded-lg border border-[#263646] bg-[#0b131c] p-2 text-[10px] text-[#b8c7d3]">
-                  <p className="font-semibold text-white">{selectedSavedMatch?.home_team} vs {selectedSavedMatch?.away_team}</p>
-                  <p className="mt-1">{[selectedSavedMatch?.age_group, selectedSavedMatch?.competition].filter(Boolean).join(" · ")}</p>
-                  <p className="mt-1">{language === "pt" ? "Os novos links serão associados a este jogo, sem criar outro registo." : "New links will be added to this match without creating another record."}</p>
-                </div>
-              ) : (
-                <>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.analyzed}
-                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={team} onChange={(e) => setTeam(e.target.value)} required />
-                  </label>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">{t.opponent}
-                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={opponent} onChange={(e) => setOpponent(e.target.value)} required />
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#31475a] bg-[#0b131c] px-2.5 py-2 text-[11px] font-semibold text-[#c4d1dc]">
-                    <input type="checkbox" className="accent-[#35d07f]" checked={analyzedTeamIsHome} onChange={(e) => setAnalyzedTeamIsHome(e.target.checked)} />
-                    <span>{language === "pt" ? "A equipa analisada joga em casa" : "Analysed team plays at home"}</span>
-                  </label>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
-                    {language === "pt" ? "Escalão *" : "Age group *"}
-                    <input className="field mt-1 !px-2.5 !py-2 text-xs" list="sportanalist-age-groups" value={ageGroup}
-                      onChange={(e) => setAgeGroup(e.target.value)} placeholder={language === "pt" ? "Ex.: Sub-17" : "e.g. U17"} required />
-                    <datalist id="sportanalist-age-groups">{ageGroupOptions.map((item) => <option key={item} value={item} />)}</datalist>
-                  </label>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
-                    {language === "pt" ? "Competição" : "Competition"}
-                    <input className="field mt-1 !px-2.5 !py-2 text-xs" list="sportanalist-competitions" value={competition}
-                      onChange={(e) => setCompetition(e.target.value)} placeholder={language === "pt" ? "Escolhe uma existente ou escreve nova" : "Choose existing or enter new"} required />
-                    <datalist id="sportanalist-competitions">{competitionOptions.map((item) => <option key={item} value={item} />)}</datalist>
-                  </label>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
-                    {language === "pt" ? "Data do jogo" : "Match date"}
-                    <input type="date" className="field mt-1 !px-2.5 !py-2 text-xs" value={playedAt}
-                      onChange={(e) => setPlayedAt(e.target.value)} required />
-                  </label>
-                  <label className="block text-[11px] font-semibold text-[#a8b8c7]">
-                    {language === "pt" ? "Local do jogo (opcional)" : "Venue (optional)"}
-                    <input className="field mt-1 !px-2.5 !py-2 text-xs" value={venue} onChange={(e) => setVenue(e.target.value)}
-                      placeholder={language === "pt" ? "Pavilhão / local" : "Sports hall / venue"} />
-                  </label>
-                </>
-              )}
-
-              <div className="grid gap-1.5">
-                <p className="text-[11px] font-semibold text-[#a8b8c7]">{language === "pt" ? "Links dos vídeos YouTube" : "YouTube video links"}</p>
-                {videoLinks.map((url, index) => (
-                  <div key={index} className="flex min-w-0 items-center gap-1.5">
-                    <input className="field min-w-0 flex-1 !px-2.5 !py-2 text-xs"
-                      placeholder={language === "pt" ? `Vídeo ${index + 1} · youtube.com/watch?v=…` : `Video ${index + 1} · youtube.com/watch?v=…`}
-                      value={url} onChange={(e) => updateVideoLink(index, e.target.value)} />
-                    {videoLinks.length > 1 && <button type="button" className="btn !h-8 !w-8 !p-0 text-rose-300" aria-label={language === "pt" ? "Remover link" : "Remove link"} onClick={() => removeVideoLinkField(index)}><X size={13} /></button>}
-                  </div>
-                ))}
-                <button type="button" className="btn w-full !justify-center !py-1.5 text-[10px]" onClick={addVideoLinkField}>
-                  <Plus size={12} />{language === "pt" ? "Adicionar outro vídeo" : "Add another video"}
-                </button>
-              </div>
-
-              <button className="btn btn-primary w-full !py-2 text-xs"
-                disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"}
-                onClick={() => void loadVideo()}>
-                <Video size={14} />
-                {isAddingVideosToExistingMatch
-                  ? (language === "pt" ? "Adicionar vídeos e carregar" : "Add videos and load")
-                  : (language === "pt" ? "Registar jogo e carregar vídeos" : "Register match and load videos")}
-              </button>
-            </section>
-          </>}
-
-          {supabase && projectId && <section className="min-h-0 flex-1 border-t border-[#263646] pt-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.savedMatches}</h3>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setMatchesRefreshKey((current) => current + 1)}
-                  className="flex items-center gap-1 rounded border border-[#31475a] px-2 py-1 text-[10px] text-[#b8c7d3] hover:border-[#5f819e]"
-                  title={language === "pt" ? "Atualizar e importar jogos terminados" : "Refresh and import completed matches"}>
-                  <RefreshCw size={11} />{language === "pt" ? "Atualizar" : "Refresh"}
-                </button>
-                <span className="rounded-full border border-[#263646] px-2 py-0.5 text-[10px]">{matches.length}</span>
-              </div>
-            </div>
-            {matchesSyncError && <p role="alert" className="mb-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] leading-relaxed text-amber-200">{matchesSyncError}</p>}
-            {matches.length === 0 ? <p className="muted py-2 text-xs">{t.noMatches}</p> : <div className="scrollbar flex flex-col gap-1.5 overflow-y-auto">
-              {matches.map((match) => {
-                return <div key={match.id} className={`rounded-lg border p-2 ${cloudMatchId === match.id ? "border-[#35d07f80] bg-[#35d07f0e]" : "border-[#263646] bg-[#0b131c]"}`}>
-                  <button className="block w-full text-left" onClick={() => void openSavedMatch(match)} title={t.openMatch}>
-                    <p className="truncate text-xs font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
-                    <p className="muted mt-1 text-[10px]">
-                      {[match.age_group, match.competition].filter(Boolean).join(" · ")}
-                      {[match.played_at ? new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "short" }).format(new Date(match.played_at)) : null, match.kickoff_time ? match.kickoff_time.slice(0, 5) : null].filter(Boolean).join(" · ")}
-                    </p>
-                    {match.venue && <p className="muted mt-1 truncate text-[10px]">{match.venue}</p>}
-                    <p className="muted mt-1 text-[9px]">{language === "pt" ? "Equipa analisada:" : "Analysed team:"} {match.analyzed_team} · {match.home_team === match.analyzed_team ? (language === "pt" ? "Casa" : "Home") : (language === "pt" ? "Fora" : "Away")}</p>
-                    {match.source_public_live_match_id && <p className="mt-1 text-[9px] font-semibold text-[#83e6a9]">{language === "pt" ? "Jogo ao vivo · Terminado" : "Live match · Finished"}</p>}
-                  </button>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    {match.youtube_url
-                      ? <a className="flex min-w-0 items-center gap-1 truncate text-[10px] text-[#8fc8ff] hover:underline" href={match.youtube_url} target="_blank" rel="noreferrer"><Link2 size={11} className="shrink-0" />{language === "pt" ? "Link do vídeo" : "Video link"}</a>
-                      : <span className="text-[10px] text-amber-300">{language === "pt" ? "Sem vídeo associado" : "No video attached"}</span>}
-                    <button className="rounded border border-[#31475a] px-2 py-1 text-[10px] hover:border-[#5f819e]" onClick={() => openSavedMatch(match)}>{t.openMatch}</button>
-                  </div>
-                </div>;
-              })}
-            </div>}
-          </section>}
-
-          {supabase && projectId && role === "admin" && <section className="border-t border-[#263646] pt-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.members}</h3>
-            <label className="block text-[11px] text-[#9eb0c0]">{t.memberEmail}
-              <input type="email" className="field mt-1 !px-2.5 !py-2 text-xs" value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} placeholder="analista@clube.pt" />
-            </label>
-            <label className="mt-2 block text-[11px] text-[#9eb0c0]">{t.memberRole}
-              <select className="field mt-1 !px-2.5 !py-2 text-xs" value={memberRole} onChange={(e) => setMemberRole(e.target.value as AppRole)}>
-                <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
-              </select>
-            </label>
-            <button className="btn btn-primary mt-2 w-full !py-2 text-xs" disabled={!memberEmail.trim()} onClick={() => void addProjectMember()}><Plus size={13} />{t.addMember}</button>
-          </section>}
+          <div className="mt-auto border-t border-[#263646] pt-3">
+            {cloudUserId && <p className="muted mb-2 truncate text-[10px]">{t[role]}</p>}
+            <button type="button" className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-rose-300 hover:bg-rose-950/30"
+              onClick={() => void signOutFromSidebar()}>
+              <LogOut size={18} />Sair
+            </button>
+          </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col gap-4">
