@@ -200,6 +200,10 @@ export default function HomePage() {
   const [importedLiveData, setImportedLiveData] = useState<ImportedLiveMatchData | null>(null);
   const [importedLiveLoading, setImportedLiveLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [workspaceSection, setWorkspaceSection] = useState<"post-match" | "settings">("post-match");
+  const [postMatchPage, setPostMatchPage] = useState<"home" | "new" | "saved" | "analysis">("home");
+  const [analysisTab, setAnalysisTab] = useState<"video" | "events" | "report">("video");
+  const [settingsTab, setSettingsTab] = useState<"account" | "events" | "members">("account");
   const playerRef = useRef<YouTubePlayer | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -766,6 +770,9 @@ export default function HomePage() {
 
     setVideoLinks([""]);
     selectMatchVideo(activeVideoUrl);
+    setWorkspaceSection("post-match");
+    setPostMatchPage("analysis");
+    setAnalysisTab("video");
     setSidebarOpen(false);
   }
 
@@ -827,6 +834,9 @@ export default function HomePage() {
       : (language === "pt"
         ? "Jogo aberto sem vídeo associado. Podes adicionar um ou vários links YouTube."
         : "Match opened without a video. You can add one or more YouTube links."));
+    setWorkspaceSection("post-match");
+    setPostMatchPage("analysis");
+    setAnalysisTab("video");
     setSidebarOpen(false);
   }
 
@@ -850,6 +860,9 @@ export default function HomePage() {
     setPublicShareToken(null);
     setPublicShareUrl("");
     setShareBusy(false);
+    setWorkspaceSection("post-match");
+    setPostMatchPage("new");
+    setAnalysisTab("video");
     setSidebarOpen(false);
   }
 
