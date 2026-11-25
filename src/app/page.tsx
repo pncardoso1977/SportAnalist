@@ -1701,7 +1701,7 @@ export default function HomePage() {
                     <section className="grid gap-2 border-t border-[#263646] pt-3">
                       <div><h3 className="text-xs font-semibold">{language === "pt" ? "Link público do resumo" : "Public summary link"}</h3><p className="muted mt-1 text-[9px] leading-relaxed">{language === "pt" ? "Qualquer pessoa com o link pode ver apenas a sequência de vídeo, sem aceder aos eventos, estatísticas ou à análise do jogo. O link guarda a seleção atual; atualiza-o depois de alterar as jogadas ou a duração." : "Anyone with the link can view only the video sequence, with no access to events, statistics or match analysis. The link stores the current selection; update it after changing plays or duration."}</p></div>
                       {canCreateSummaryShare ? <>
-                        {summaryShareToken && <div className="grid gap-2">
+                        {summaryShareToken ? <div className="grid gap-2">
                           <input className="field min-w-0 !py-2 text-[10px]" readOnly aria-label={language === "pt" ? "Link público do resumo" : "Public summary link"} value={summaryShareUrl} />
                           <div className="flex flex-wrap gap-2">
                             <button type="button" className="btn !py-1.5 text-[10px]" disabled={summaryShareBusy} onClick={() => void copySummaryShareLink()}><Copy size={12} />{language === "pt" ? "Copiar link" : "Copy link"}</button>
