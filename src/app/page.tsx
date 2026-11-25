@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity, ArrowDownToLine, ArrowLeft, CircleHelp, Clock3, Copy, FilePlus2,
-  Film, FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
+  Film, FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, UserPlus, UserRound, UsersRound, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type MatchVideo, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
@@ -16,6 +16,45 @@ import { formatDuration, playerCourtSecondsInRange, type PlayerStint } from "@/l
 
 type Language = "pt" | "en";
 type AiGoalSuggestion = DetectedGoal & { id: string; confirmed: boolean };
+type PlayerAnalysisRole = "goalkeeper" | "field";
+type MatchAnalysisPlayer = {
+  id: string; match_id: string; display_name: string; shirt_number: string | null;
+  role_key: PlayerAnalysisRole; sort_order: number; created_by: string | null; created_at: string;
+};
+type PlayerAnalysisEvent = {
+  id: string; group_id: string; match_id: string; player_id: string; category_key: string;
+  detail_key: string | null; video_second: number; youtube_url: string;
+  created_by: string | null; created_at: string;
+};
+type PlayerAnalysisAction = {
+  key: string; pt: string; en: string;
+  details?: { key: string; pt: string; en: string }[];
+};
+const PLAYER_ANALYSIS_ACTIONS: Record<PlayerAnalysisRole, PlayerAnalysisAction[]> = {
+  goalkeeper: [
+    { key: "goalkeeper_save", pt: "Defesa", en: "Save", details: [{ key: "posts", pt: "Postes", en: "Posts" }, { key: "area", pt: "Área", en: "Area" }, { key: "outside", pt: "Fora", en: "Outside" }] },
+    { key: "goalkeeper_incomplete_save", pt: "Defesa incompleta", en: "Incomplete save" },
+    { key: "goalkeeper_goal_conceded", pt: "Golo sofrido", en: "Goal conceded", details: [{ key: "right", pt: "Direita", en: "Right" }, { key: "left", pt: "Esquerda", en: "Left" }, { key: "center", pt: "Centro", en: "Center" }] },
+    { key: "goalkeeper_sweep_behind", pt: "Saída atrás", en: "Sweep behind", details: [{ key: "right", pt: "Direita", en: "Right" }, { key: "left", pt: "Esquerda", en: "Left" }, { key: "center", pt: "Centro", en: "Center" }] },
+    { key: "goalkeeper_sweep_front", pt: "Saída na frente", en: "Front exit", details: [{ key: "right", pt: "Direita", en: "Right" }, { key: "left", pt: "Esquerda", en: "Left" }, { key: "center", pt: "Centro", en: "Center" }] },
+    { key: "goalkeeper_ball_release", pt: "Saída com bola", en: "Ball distribution", details: [{ key: "right", pt: "Direita", en: "Right" }, { key: "left", pt: "Esquerda", en: "Left" }, { key: "center", pt: "Centro", en: "Center" }] },
+    { key: "goalkeeper_footwork", pt: "Jogo de pés", en: "Footwork" },
+  ],
+  field: [
+    { key: "field_pass", pt: "Passe", en: "Pass", details: [{ key: "short", pt: "Curto", en: "Short" }, { key: "long", pt: "Longo", en: "Long" }] },
+    { key: "field_reception", pt: "Receção", en: "Reception" },
+    { key: "field_ball_carry", pt: "Condução de bola", en: "Ball carry" },
+    { key: "field_ball_loss", pt: "Perda de bola", en: "Possession lost" },
+    { key: "field_shot", pt: "Remate", en: "Shot" },
+    { key: "field_interception", pt: "Corte", en: "Interception" },
+  ],
+};
+function playerAnalysisActionLabel(categoryKey: string, detailKey: string | null, language: Language): string {
+  const action = Object.values(PLAYER_ANALYSIS_ACTIONS).flat().find((item) => item.key === categoryKey);
+  if (!action) return categoryKey;
+  const detail = action.details?.find((item) => item.key === detailKey);
+  return `${language === "pt" ? action.pt : action.en}${detail ? ` (${language === "pt" ? detail.pt : detail.en})` : ""}`;
+}
 type ImportedLivePlayer = { id: string; full_name: string; display_name: string; sort_order: number; active: boolean };
 type ImportedLiveMatchData = {
   clock: { elapsed_seconds: number; first_half_seconds: number | null; started_at: string | null; status: "scheduled" | "running" | "paused" | "finished" };
@@ -182,6 +221,15 @@ export default function HomePage() {
   const [currentSecond, setCurrentSecond] = useState(0);
   const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENT_TYPES);
   const [records, setRecords] = useState<MatchEvent[]>([]);
+  const [analysisPlayers, setAnalysisPlayers] = useState<MatchAnalysisPlayer[]>([]);
+  const [playerAnalysisEvents, setPlayerAnalysisEvents] = useState<PlayerAnalysisEvent[]>([]);
+  const [playerAnalysisSchemaError, setPlayerAnalysisSchemaError] = useState("");
+  const [captureMode, setCaptureMode] = useState<"team" | "player">("team");
+  const [playerRoleFilter, setPlayerRoleFilter] = useState<PlayerAnalysisRole>("field");
+  const [newAnalysisPlayerName, setNewAnalysisPlayerName] = useState("");
+  const [newAnalysisPlayerNumber, setNewAnalysisPlayerNumber] = useState("");
+  const [newAnalysisPlayerRole, setNewAnalysisPlayerRole] = useState<PlayerAnalysisRole>("field");
+  const [selectedAnalysisPlayerIds, setSelectedAnalysisPlayerIds] = useState<string[]>([]);
   const [outcomeText, setOutcomeText] = useState("");
   const [newNamePt, setNewNamePt] = useState("");
   const [newNameEn, setNewNameEn] = useState("");
@@ -263,6 +311,7 @@ export default function HomePage() {
     playerRef.current?.pauseVideo();
     shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
     setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
     setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
@@ -282,13 +331,15 @@ export default function HomePage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate the local-only demo store once.
         if (Array.isArray(data.records)) setRecords(data.records);
         if (Array.isArray(data.events)) setEvents(data.events);
+        if (Array.isArray(data.analysisPlayers)) setAnalysisPlayers(data.analysisPlayers);
+        if (Array.isArray(data.playerAnalysisEvents)) setPlayerAnalysisEvents(data.playerAnalysisEvents);
       }
     } catch { /* Ignore malformed local demo data. */ }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("sportanalist-demo", JSON.stringify({ records, events }));
-  }, [records, events]);
+    localStorage.setItem("sportanalist-demo", JSON.stringify({ records, events, analysisPlayers, playerAnalysisEvents }));
+  }, [records, events, analysisPlayers, playerAnalysisEvents]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -309,6 +360,24 @@ export default function HomePage() {
           defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
           youtube_url: row.youtube_url,
         })));
+        const [{ data: playerRows, error: playerRowsError }, { data: playerEventRows, error: playerEventRowsError }] = await Promise.all([
+          supabase.from("match_analysis_players").select("*").eq("match_id", cloudMatchId).order("sort_order").order("display_name"),
+          supabase.from("match_player_analysis_events").select("*").eq("match_id", cloudMatchId).order("created_at", { ascending: false }),
+        ]);
+        if (!cancelled) {
+          if (playerRowsError || playerEventRowsError) {
+            setPlayerAnalysisSchemaError(language === "pt"
+              ? "A análise individual ainda não está instalada na base de dados. Executa a migração SQL 0027."
+              : "Individual player analysis is not installed in the database yet. Apply SQL migration 0027.");
+            setAnalysisPlayers([]);
+            setPlayerAnalysisEvents([]);
+          } else {
+            setPlayerAnalysisSchemaError("");
+            setAnalysisPlayers((playerRows ?? []) as MatchAnalysisPlayer[]);
+            setPlayerAnalysisEvents((playerEventRows ?? []) as PlayerAnalysisEvent[]);
+            setSelectedAnalysisPlayerIds([]);
+          }
+        }
       }
     };
     void loadWorkspaceData();
@@ -459,6 +528,12 @@ export default function HomePage() {
     .filter((clip): clip is SummaryClip => clip !== null),
     [summaryCandidates, summarySelectedIds, automaticGoalIds, loadedUrl, summaryClipDuration]);
   const goalScores = useMemo(() => calculateGoalScores(records), [records]);
+  const visibleAnalysisPlayers = useMemo(() => analysisPlayers.filter((player) => player.role_key === playerRoleFilter)
+    .sort((a, b) => a.sort_order - b.sort_order || a.display_name.localeCompare(b.display_name, "pt-PT")), [analysisPlayers, playerRoleFilter]);
+  const selectedAnalysisPlayers = useMemo(() => analysisPlayers.filter((player) => selectedAnalysisPlayerIds.includes(player.id) && player.role_key === playerRoleFilter), [analysisPlayers, selectedAnalysisPlayerIds, playerRoleFilter]);
+  const playerAnalysisFeed = useMemo(() => playerAnalysisEvents.slice().sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  ), [playerAnalysisEvents]);
 
   async function registerEvent(
     eventType: EventType,
@@ -672,6 +747,132 @@ export default function HomePage() {
     setMessage(t.removed);
   }
 
+  function changePlayerRoleFilter(role: PlayerAnalysisRole) {
+    setPlayerRoleFilter(role);
+    setNewAnalysisPlayerRole(role);
+    setSelectedAnalysisPlayerIds([]);
+  }
+
+  async function addAnalysisPlayer() {
+    const displayName = newAnalysisPlayerName.trim();
+    if (!displayName || !canRecord) return;
+    if (analysisPlayers.some((player) => player.display_name.trim().toLocaleLowerCase("pt-PT") === displayName.toLocaleLowerCase("pt-PT"))) {
+      setMessage(language === "pt" ? "Esse jogador já está registado neste jogo." : "That player is already registered for this match.");
+      return;
+    }
+    const row = {
+      match_id: cloudMatchId ?? "demo-match",
+      display_name: displayName,
+      shirt_number: newAnalysisPlayerNumber.trim() || null,
+      role_key: newAnalysisPlayerRole,
+      sort_order: (analysisPlayers.length + 1) * 10,
+      created_by: cloudUserId,
+    };
+    let saved: MatchAnalysisPlayer;
+    if (supabase) {
+      if (!cloudMatchId || !cloudUserId) { setMessage(t.noAuth); return; }
+      const { data, error } = await supabase.from("match_analysis_players").insert(row).select("*").single();
+      if (error || !data) {
+        setMessage(error?.message ?? (language === "pt" ? "Não foi possível adicionar o jogador. Confirma a migração SQL 0027." : "Could not add player. Confirm SQL migration 0027."));
+        return;
+      }
+      saved = data as MatchAnalysisPlayer;
+    } else {
+      saved = { ...row, id: crypto.randomUUID(), created_by: null, created_at: new Date().toISOString() };
+    }
+    setAnalysisPlayers((current) => [...current, saved]);
+    setSelectedAnalysisPlayerIds((current) => [...current, saved.id]);
+    setPlayerRoleFilter(saved.role_key);
+    setNewAnalysisPlayerRole(saved.role_key);
+    setNewAnalysisPlayerName("");
+    setNewAnalysisPlayerNumber("");
+    setMessage(language === "pt" ? "Jogador adicionado à análise individual." : "Player added to individual analysis.");
+  }
+
+  async function updateAnalysisPlayerRole(player: MatchAnalysisPlayer, role: PlayerAnalysisRole) {
+    if (player.role_key === role || !canRecord) return;
+    if (supabase) {
+      const { data, error } = await supabase.from("match_analysis_players").update({ role_key: role }).eq("id", player.id).select("*").single();
+      if (error || !data) { setMessage(error?.message ?? t.saveError); return; }
+      setAnalysisPlayers((current) => current.map((item) => item.id === player.id ? data as MatchAnalysisPlayer : item));
+    } else {
+      setAnalysisPlayers((current) => current.map((item) => item.id === player.id ? { ...item, role_key: role } : item));
+    }
+    setSelectedAnalysisPlayerIds((current) => current.filter((id) => id !== player.id));
+  }
+
+  async function removeAnalysisPlayer(player: MatchAnalysisPlayer) {
+    if (!canRecord) return;
+    if (supabase) {
+      const { error } = await supabase.from("match_analysis_players").delete().eq("id", player.id);
+      if (error) { setMessage(error.message); return; }
+    }
+    setAnalysisPlayers((current) => current.filter((item) => item.id !== player.id));
+    setPlayerAnalysisEvents((current) => current.filter((item) => item.player_id !== player.id));
+    setSelectedAnalysisPlayerIds((current) => current.filter((id) => id !== player.id));
+  }
+
+  async function registerPlayerAnalysisAction(categoryKey: string, detailKey: string | null = null) {
+    if (!canRecord || selectedAnalysisPlayers.length === 0) {
+      setMessage(language === "pt" ? "Seleciona pelo menos um jogador para registar o momento." : "Select at least one player to record the action.");
+      return;
+    }
+    const capturedSecond = playerRef.current?.getCurrentTime?.() ?? currentSecond;
+    const second = Math.max(0, Math.floor(capturedSecond - 10));
+    const videoMoment = youtubeMoment(loadedUrl, second);
+    const groupId = crypto.randomUUID();
+    const base = selectedAnalysisPlayers.map((player) => ({
+      group_id: groupId, match_id: cloudMatchId ?? "demo-match", player_id: player.id,
+      category_key: categoryKey, detail_key: detailKey, video_second: second,
+      youtube_url: videoMoment, created_by: cloudUserId,
+    }));
+    let saved: PlayerAnalysisEvent[];
+    if (supabase) {
+      if (!cloudMatchId || !cloudUserId) { setMessage(t.noAuth); return; }
+      const { data, error } = await supabase.from("match_player_analysis_events").insert(base).select("*");
+      if (error || !data) {
+        setMessage(error?.message ?? (language === "pt" ? "Não foi possível registar a ação individual. Confirma a migração SQL 0027." : "Could not record the individual action. Confirm SQL migration 0027."));
+        return;
+      }
+      saved = data as PlayerAnalysisEvent[];
+    } else {
+      const timestamp = new Date().toISOString();
+      saved = base.map((item) => ({ ...item, id: crypto.randomUUID(), created_by: null, created_at: timestamp }));
+    }
+    setPlayerAnalysisEvents((current) => [...saved, ...current]);
+    setMessage(language === "pt"
+      ? `${playerAnalysisActionLabel(categoryKey, detailKey, language)} registado para ${selectedAnalysisPlayers.length} jogador(es).`
+      : `${playerAnalysisActionLabel(categoryKey, detailKey, language)} recorded for ${selectedAnalysisPlayers.length} player(s).`);
+  }
+
+  function seekToPlayerAnalysisEvent(record: PlayerAnalysisEvent) {
+    const eventVideoId = parseYouTubeId(record.youtube_url);
+    if (!eventVideoId) return;
+    if (eventVideoId !== videoId) {
+      pendingSeekRef.current = record.video_second;
+      setLoadedUrl(record.youtube_url);
+      setVideoId(eventVideoId);
+      setCurrentSecond(record.video_second);
+      return;
+    }
+    if (!playerRef.current) {
+      pendingSeekRef.current = record.video_second;
+      setCurrentSecond(record.video_second);
+      return;
+    }
+    playerRef.current.seekTo(record.video_second, true);
+    setCurrentSecond(record.video_second);
+  }
+
+  async function removePlayerAnalysisEvent(record: PlayerAnalysisEvent) {
+    if (!canRecord) return;
+    if (supabase) {
+      const { error } = await supabase.from("match_player_analysis_events").delete().eq("id", record.id);
+      if (error) { setMessage(error.message); return; }
+    }
+    setPlayerAnalysisEvents((current) => current.filter((item) => item.id !== record.id));
+  }
+
   async function loadImportedLiveData(publicMatchId: string) {
     if (!supabase) return;
     setImportedLiveLoading(true);
@@ -824,7 +1025,10 @@ export default function HomePage() {
       setMatchVideos((savedVideos ?? []) as MatchVideo[]);
       setMatches((current) => [targetMatch!, ...current.filter((match) => match.id !== targetMatch!.id)]);
       setCloudMatchId(targetMatch.id);
-      if (!existingMatch) setRecords([]);
+      if (!existingMatch) {
+        setRecords([]);
+        setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+      }
       setImportedLiveData(existingMatch?.source_public_live_match_id ? importedLiveData : null);
       void loadShareForMatch(targetMatch.id);
       void loadSummaryShareForMatch(targetMatch.id);
@@ -834,7 +1038,7 @@ export default function HomePage() {
       setPublicShareToken(null);
       setPublicShareUrl("");
       setShareBusy(false);
-      setRecords([]);
+      setRecords([]); setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
       setMatchVideos(uniqueVideoUrls.map((url, index) => ({
         id: `demo-video-${index}`, match_id: "demo-match", youtube_url: url, sort_order: index,
       })));
@@ -851,6 +1055,8 @@ export default function HomePage() {
   async function openSavedMatch(match: Match) {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+    setCaptureMode("team");
     setAiCandidates([]);
     setAiConsent(false);
     setAiError("");
@@ -918,6 +1124,8 @@ export default function HomePage() {
   function startNewMatch() {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+    setCaptureMode("team");
     summaryShareRequestRef.current += 1; setSummaryShareToken(null); setSummaryShareUrl(""); setSummaryShareBusy(false);
     shareRequestRef.current += 1;
     setCloudMatchId(null);
@@ -1508,6 +1716,11 @@ export default function HomePage() {
           </section>
                   <div className="grid min-w-0 content-start gap-3">
                     {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
+                      <div className="flex flex-wrap gap-2 border-b border-[#263646] pb-2">
+                        <button type="button" onClick={() => setCaptureMode("team")} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${captureMode === "team" ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3]"}`}><UsersRound size={13} />{language === "pt" ? "Análise da equipa" : "Team analysis"}</button>
+                        <button type="button" onClick={() => setCaptureMode("player")} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${captureMode === "player" ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3]"}`}><UserRound size={13} />{language === "pt" ? "Análise individual" : "Individual analysis"}</button>
+                      </div>
+                      <div className={captureMode === "team" ? "grid gap-2" : "hidden"}>
                                 <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
                                   <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
                                   <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
@@ -1577,8 +1790,71 @@ export default function HomePage() {
                                 </section>
                                 
                                 {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
-                              </section>}
-                                      {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+                      </div>
+                      {captureMode === "player" && <div className="grid min-w-0 gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div><h3 className="text-xs font-semibold">{language === "pt" ? "Análise de jogador(es)" : "Player analysis"}</h3><p className="muted mt-0.5 text-[9px]">{language === "pt" ? "Seleciona um ou vários jogadores. A ação fica associada a cada jogador e ao instante do vídeo." : "Select one or more players. The action is linked to each player and the video timestamp."}</p></div>
+                          <span className="rounded-full bg-[#35d07f18] px-2 py-1 text-[9px] text-[#83e6a9]">{selectedAnalysisPlayers.length} {language === "pt" ? "selecionados" : "selected"}</span>
+                        </div>
+                        {playerAnalysisSchemaError && <p role="alert" className="rounded-lg border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] text-amber-200">{playerAnalysisSchemaError}</p>}
+                        <div className="grid grid-cols-[minmax(0,1fr)_78px] gap-2">
+                          <label className="min-w-0 text-[9px] font-semibold text-[#a8b8c7]">{language === "pt" ? "Nome do jogador" : "Player name"}
+                            <input className="field mt-1 !px-2 !py-1.5 text-[11px]" maxLength={60} value={newAnalysisPlayerName} onChange={(event) => setNewAnalysisPlayerName(event.target.value)} placeholder={language === "pt" ? "Adicionar jogador" : "Add player"} />
+                          </label>
+                          <label className="text-[9px] font-semibold text-[#a8b8c7]">{language === "pt" ? "N.º" : "No."}
+                            <input className="field mt-1 !px-2 !py-1.5 text-[11px]" maxLength={6} value={newAnalysisPlayerNumber} onChange={(event) => setNewAnalysisPlayerNumber(event.target.value)} placeholder="—" />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                          <label className="text-[9px] font-semibold text-[#a8b8c7]">{language === "pt" ? "Função" : "Role"}
+                            <select className="field mt-1 !py-1.5 text-[10px]" value={newAnalysisPlayerRole} onChange={(event) => setNewAnalysisPlayerRole(event.target.value as PlayerAnalysisRole)}>
+                              <option value="goalkeeper">{language === "pt" ? "Guarda-Redes" : "Goalkeeper"}</option><option value="field">{language === "pt" ? "Jogador Campo" : "Outfield player"}</option>
+                            </select>
+                          </label>
+                          <button type="button" className="btn btn-primary !py-1.5 text-[10px]" disabled={!canRecord || !newAnalysisPlayerName.trim()} onClick={() => void addAnalysisPlayer()}><UserPlus size={12} />{language === "pt" ? "Adicionar" : "Add"}</button>
+                        </div>
+                        <div className="flex gap-1.5 border-b border-[#263646] pb-2">
+                          <button type="button" onClick={() => changePlayerRoleFilter("goalkeeper")} className={`flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${playerRoleFilter === "goalkeeper" ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3]"}`}>Guarda-Redes ({analysisPlayers.filter((player) => player.role_key === "goalkeeper").length})</button>
+                          <button type="button" onClick={() => changePlayerRoleFilter("field")} className={`flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${playerRoleFilter === "field" ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3]"}`}>{language === "pt" ? "Jogador Campo" : "Outfield"} ({analysisPlayers.filter((player) => player.role_key === "field").length})</button>
+                        </div>
+                        <div className="grid max-h-[145px] gap-1 overflow-y-auto pr-1">
+                          {visibleAnalysisPlayers.length === 0 ? <p className="muted rounded-lg border border-dashed border-[#31475a] px-2 py-3 text-center text-[10px]">{language === "pt" ? "Ainda não existem jogadores nesta função. Adiciona o primeiro acima." : "No players in this role yet. Add the first one above."}</p> : visibleAnalysisPlayers.map((player) => (
+                            <div key={player.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 ${selectedAnalysisPlayerIds.includes(player.id) ? "border-[#35d07f70] bg-[#35d07f10]" : "border-[#263646] bg-[#0b131c]"}`}>
+                              <input type="checkbox" className="accent-[#35d07f]" checked={selectedAnalysisPlayerIds.includes(player.id)} disabled={!canRecord} onChange={(event) => setSelectedAnalysisPlayerIds((current) => event.target.checked ? [...current, player.id] : current.filter((id) => id !== player.id))} />
+                              <span className="min-w-0 flex-1 truncate text-[10px] font-medium">{player.shirt_number ? `${player.shirt_number} · ` : ""}{player.display_name}</span>
+                              <select aria-label={language === "pt" ? `Função de ${player.display_name}` : `${player.display_name} role`} className="w-[93px] rounded border border-[#31475a] bg-[#101923] px-1 py-1 text-[9px] text-[#b8c7d3]" value={player.role_key} disabled={!canRecord} onChange={(event) => void updateAnalysisPlayerRole(player, event.target.value as PlayerAnalysisRole)}>
+                                <option value="goalkeeper">{language === "pt" ? "Guarda-Redes" : "Goalkeeper"}</option><option value="field">{language === "pt" ? "Campo" : "Field"}</option>
+                              </select>
+                              <button type="button" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-rose-950/30" title={language === "pt" ? "Remover jogador" : "Remove player"} aria-label={language === "pt" ? "Remover jogador" : "Remove player"} disabled={!canRecord} onClick={() => void removeAnalysisPlayer(player)}><Trash2 size={12} /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid gap-2 border-t border-[#263646] pt-2">
+                          <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{playerRoleFilter === "goalkeeper" ? (language === "pt" ? "Momentos do guarda-redes" : "Goalkeeper actions") : (language === "pt" ? "Momentos do jogador de campo" : "Outfield actions")}</h4><span className="muted text-[9px]">{language === "pt" ? "Registo: vídeo −10 s" : "Capture: video −10 sec"}</span></div>
+                          {!selectedAnalysisPlayers.length && <p className="text-[10px] text-amber-200">{language === "pt" ? "Seleciona pelo menos um jogador para ativar os momentos." : "Select at least one player to enable the actions."}</p>}
+                          {PLAYER_ANALYSIS_ACTIONS[playerRoleFilter].map((action) => (
+                            <div key={action.key} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border border-[#263646] bg-[#0b131c] px-2 py-1.5">
+                              <span className="w-full text-[10px] font-semibold text-[#d0dbe4]">{language === "pt" ? action.pt : action.en}</span>
+                              {action.details ? action.details.map((detail) => <button key={detail.key} type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} onClick={() => void registerPlayerAnalysisAction(action.key, detail.key)} className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[9px] font-medium text-[#8cebb2] hover:bg-[#173a29] disabled:cursor-not-allowed disabled:opacity-35">{language === "pt" ? detail.pt : detail.en}</button>) : <button type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} onClick={() => void registerPlayerAnalysisAction(action.key)} className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[9px] font-medium text-[#8cebb2] hover:bg-[#173a29] disabled:cursor-not-allowed disabled:opacity-35"><Plus size={10} className="mr-1 inline" />{language === "pt" ? "Registar" : "Record"}</button>}
+                            </div>
+                          ))}
+                        </div>
+                        <section className="grid gap-1.5 border-t border-[#263646] pt-2">
+                          <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Registos individuais" : "Individual records"}</h4><span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#83e6a9]">{playerAnalysisEvents.length}</span></div>
+                          {playerAnalysisFeed.length === 0 ? <p className="muted px-1 py-2 text-[10px]">{language === "pt" ? "Ainda não existem ações individuais registadas." : "No individual actions recorded yet."}</p> : <div className="grid max-h-[180px] gap-1 overflow-y-auto pr-1">
+                            {playerAnalysisFeed.slice(0, 30).map((record) => {
+                              const player = analysisPlayers.find((item) => item.id === record.player_id);
+                              return <div key={record.id} className="flex items-center gap-2 rounded-md border border-[#263646] bg-[#0b131c] px-2 py-1.5">
+                                <button type="button" className="shrink-0 font-mono text-[9px] font-semibold text-[#83e6a9] hover:underline" onClick={() => seekToPlayerAnalysisEvent(record)}>{formatTime(record.video_second)}</button>
+                                <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-semibold">{player?.display_name ?? (language === "pt" ? "Jogador removido" : "Removed player")}</span><span className="muted block truncate text-[9px]">{playerAnalysisActionLabel(record.category_key, record.detail_key, language)}</span></span>
+                                <button type="button" className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-rose-950/30" aria-label={t.delete} title={t.delete} disabled={!canRecord} onClick={() => void removePlayerAnalysisEvent(record)}><X size={12} /></button>
+                              </div>;
+                            })}
+                          </div>}
+                        </section>
+                      </div>}
+                    </section>}
+                                      {hasActiveMatch && Boolean(loadedUrl) && <section className={captureMode === "team" ? "rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5" : "hidden"}>
                                   <div className="flex items-center justify-between gap-2">
                                     <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
                                     <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
