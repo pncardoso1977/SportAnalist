@@ -1832,19 +1832,29 @@ export default function HomePage() {
                         <div className="grid gap-2 border-t border-[#263646] pt-2">
                           <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{playerRoleFilter === "goalkeeper" ? (language === "pt" ? "Momentos do guarda-redes" : "Goalkeeper actions") : (language === "pt" ? "Momentos do jogador de campo" : "Outfield actions")}</h4><span className="muted text-[9px]">{language === "pt" ? "Registo: vídeo −10 s" : "Capture: video −10 sec"}</span></div>
                           {!selectedAnalysisPlayers.length && <p className="text-[10px] text-amber-200">{language === "pt" ? "Seleciona pelo menos um jogador para ativar os momentos." : "Select at least one player to enable the actions."}</p>}
+                          <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{language === "pt" ? "Registar momento individual" : "Record individual action"}</span>
+                          </div>
                           <div className="event-single-list overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
-                            <div className="event-grid grid grid-cols-[minmax(0,1fr)_28px] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
+                            <div className="event-grid grid grid-cols-[minmax(76px,1.2fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
                               <div className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.momentColumn}</div>
-                              <div className="text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">+</div>
-                              {PLAYER_ANALYSIS_ACTIONS[playerRoleFilter].flatMap((action) => action.details?.length ? action.details.map((detail) => ({ action, detail })) : [{ action, detail: null }]).map(({ action, detail }) => {
-                                const momentLabel = (language === "pt" ? action.pt : action.en) + (detail ? " (" + (language === "pt" ? detail.pt : detail.en) + ")" : "");
-                                return <div key={action.key + "-" + (detail?.key ?? "default")} className="contents">
-                                  <div className="truncate py-1.5 pr-1 text-[10px] font-medium text-[#d0dbe4]" title={momentLabel}>{momentLabel}</div>
-                                  <div className="flex items-center justify-center">
-                                    <button type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} title={(language === "pt" ? "Registar" : "Record") + " · " + momentLabel} aria-label={(language === "pt" ? "Registar" : "Record") + " · " + momentLabel} onClick={() => void registerPlayerAnalysisAction(action.key, detail?.key ?? null)} className="event-shortcut event-shortcut-attack flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
-                                      <Plus size={10} />
-                                    </button>
-                                  </div>
+                              {[language === "pt" ? "OPÇÃO 1" : "OPTION 1", language === "pt" ? "OPÇÃO 2" : "OPTION 2", language === "pt" ? "OPÇÃO 3" : "OPTION 3"].map((label) => <div key={label} className="truncate px-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{label}</div>)}
+                              {PLAYER_ANALYSIS_ACTIONS[playerRoleFilter].map((action) => {
+                                const details = action.details?.length ? action.details : [null];
+                                return <div key={action.key} className="contents">
+                                  <div className="truncate py-1.5 pr-1 text-[10px] font-medium" title={language === "pt" ? action.pt : action.en}>{language === "pt" ? action.pt : action.en}</div>
+                                  {[0, 1, 2].map((slot) => {
+                                    const detail = details[slot] ?? null;
+                                    if (slot >= details.length) return <div key={slot} className="flex items-center justify-center text-[10px] text-[#526170]">—</div>;
+                                    const optionLabel = detail ? (language === "pt" ? detail.pt : detail.en) : (language === "pt" ? action.pt : action.en);
+                                    return <div key={slot} className="flex min-w-0 items-center justify-center gap-1">
+                                      {detail && <span className="truncate text-[9px] text-[#b8c7d3]" title={optionLabel}>{optionLabel}</span>}
+                                      <button type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} title={(language === "pt" ? "Registar" : "Record") + " · " + (language === "pt" ? action.pt : action.en) + (detail ? " · " + optionLabel : "")} aria-label={(language === "pt" ? "Registar" : "Record") + " · " + (language === "pt" ? action.pt : action.en) + (detail ? " · " + optionLabel : "")} onClick={() => void registerPlayerAnalysisAction(action.key, detail?.key ?? null)} className="event-shortcut event-shortcut-attack flex h-5 w-5 shrink-0 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                                        <Plus size={10} />
+                                      </button>
+                                    </div>;
+                                  })}
                                 </div>;
                               })}
                             </div>
