@@ -135,7 +135,7 @@ export default function PublicPlayerAnalysisPage({ params }: { params: Promise<{
                     {activeVideoId ? (
                       <div className="aspect-video w-full">
                         <iframe
-                          key={activeEvent?.video_second + "-" + activeVideoId + "-" + activeIndex}
+                          key={(activeEvent?.video_second ?? 0) + "-" + activeVideoId + "-" + activeIndex}
                           className="h-full w-full"
                           src={"https://www.youtube-nocookie.com/embed/" + activeVideoId + "?start=" + Math.max(0, Math.floor(activeEvent?.video_second ?? 0)) + "&rel=0&modestbranding=1"}
                           title="Vídeo do momento"
