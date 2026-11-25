@@ -231,7 +231,9 @@ export default function HomePage() {
   const handleSignOut = useCallback(() => {
     shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
+    setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
+    setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
   }, []);
   const activeEvents = events.filter((event) => event.active);
   const eventRows = activeEvents.filter((event) => !event.is_counter);
@@ -933,7 +935,18 @@ export default function HomePage() {
   }
 
   async function signOutFromSidebar() {
-    if (supabase) await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    } else {
+      setCloudMatchId(null);
+      setLoadedUrl("");
+      setVideoId("");
+      setMatchVideos([]);
+      setVideoLinks([""]);
+    }
+    setWorkspaceSection("post-match");
+    setPostMatchPage("home");
+    setAnalysisTab("video");
     setSidebarOpen(false);
   }
 
