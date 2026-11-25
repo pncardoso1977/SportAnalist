@@ -85,7 +85,8 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
   }, [currentIndex]);
 
   useEffect(() => {
-    if (!started || !active || !activeVideoId) return;
+    const activeSummary = summary;
+    if (!started || !active || !activeVideoId || !activeSummary) return;
     const win = window as PlayerWindow;
     let cancelled = false;
 
@@ -124,11 +125,11 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
               if (cancelled || currentIndexRef.current !== currentIndex) return;
               const second = playerRef.current?.getCurrentTime();
               const state = playerRef.current?.getPlayerState();
-              const endSecond = active.video_second + summary.clip_duration_seconds;
+              const endSecond = active.video_second + activeSummary.clip_duration_seconds;
               if ((typeof second === "number" && second >= endSecond) || state === 0) {
                 clearClipTimer();
                 playerRef.current?.pauseVideo();
-                if (currentIndex + 1 < summary.clips.length) {
+                if (currentIndex + 1 < activeSummary.clips.length) {
                   setShowTransition(true);
                   transitionTimerRef.current = window.setTimeout(() => {
                     setShowTransition(false);
