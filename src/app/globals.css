@@ -74,7 +74,8 @@ tbody tr:hover { background: #ffffff06; }
   max-height: none;
   aspect-ratio: 16 / 9;
   background: #000;
-  margin-left: 0;
+  margin-left: auto;
+  margin-right: auto;
 }
 .event-feed-table {
   border-collapse: collapse;
