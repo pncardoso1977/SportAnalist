@@ -161,12 +161,6 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
     };
   }, [started, currentIndex, activeVideoId, active, summary]);
 
-  useEffect(() => () => {
-    if (clipTimerRef.current !== null) window.clearInterval(clipTimerRef.current);
-    if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
-    playerRef.current?.destroy();
-  }, []);
-
   function startOrReplay() {
     if (!summary || !summary.clips.length) return;
     playerRef.current?.destroy();
