@@ -202,7 +202,7 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [workspaceSection, setWorkspaceSection] = useState<"post-match" | "settings">("post-match");
   const [postMatchPage, setPostMatchPage] = useState<"home" | "new" | "saved" | "analysis">("home");
-  const [analysisTab, setAnalysisTab] = useState<"video" | "events" | "report">("video");
+  const [analysisTab, setAnalysisTab] = useState<"video" | "report">("video");
   const [settingsTab, setSettingsTab] = useState<"account" | "events" | "members">("account");
   const playerRef = useRef<YouTubePlayer | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
@@ -1232,8 +1232,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex flex-wrap gap-2 border-t border-[#263646] pt-3">
                   {([
-                    { id: "video", label: language === "pt" ? "Vídeo" : "Video", icon: Video },
-                    { id: "events", label: language === "pt" ? "Registos" : "Events", icon: ClipboardList },
+                    { id: "video", label: language === "pt" ? "Vídeo e eventos" : "Video & events", icon: Video },
                     { id: "report", label: language === "pt" ? "Relatório" : "Report", icon: Activity },
                   ] as const).map((tab) => {
                     const Icon = tab.icon;
@@ -1246,7 +1245,7 @@ export default function HomePage() {
               </section>
 
               {analysisTab === "video" && (
-                <div className="analysis-workspace without-event-controls grid min-w-0">
+                <div className="analysis-workspace with-event-controls grid min-w-0">
                   <section className="analysis-video-panel panel min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#263646] px-3 py-2">
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
@@ -1272,154 +1271,150 @@ export default function HomePage() {
               </div>
             )}
           </section>
+                  <div className="grid min-w-0 content-start gap-3">
+                    {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
+                                <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-[#f0b08d]"><span className="event-legend-plus event-legend-defense">+</span>{language === "pt" ? "Defesa (Contra)" : "Defence (against)"}</span>
+                                </div>
+                                <div className="event-single-list overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
+                                  <div className="event-grid event-single-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
+                                    <div className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.event}</div>
+                                    {(["left", "center", "right"] as Zone[]).map((eventZone) => <div key={eventZone} className="truncate px-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{ZONE_LABELS[eventZone][language]}</div>)}
+                                    {eventRows.map((event) => {
+                                      const allowedZones = zonesForEvent(event);
+                                      const name = language === "pt" ? event.name_pt : event.name_en;
+                                      return <div key={event.id} className="contents">
+                                        <div className="truncate py-1 pr-1 text-[10px] font-medium" title={name}>{name}</div>
+                                        {(["left", "center", "right"] as Zone[]).map((eventZone) => allowedZones.includes(eventZone)
+                                          ? <div key={eventZone} className="flex items-center justify-center gap-1">
+                                              <button type="button" disabled={!canRecord} title={`${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                                                aria-label={`Registar ${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                                                onClick={() => void registerEvent(event, eventZone, "attack")}
+                                                className="event-shortcut event-shortcut-attack flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                                                <Plus size={10} />
+                                              </button>
+                                              <button type="button" disabled={!canRecord} title={`${language === "pt" ? "Defesa (Contra)" : "Defence (against)"} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                                                aria-label={`Registar Defesa Contra · ${name} · ${ZONE_LABELS[eventZone][language]}`}
+                                                onClick={() => void registerEvent(event, eventZone, "defense")}
+                                                className="event-shortcut event-shortcut-defense flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                                                <Plus size={10} />
+                                              </button>
+                                            </div>
+                                          : <div key={eventZone} className="flex items-center justify-center text-[10px] text-[#526170]">—</div>)}
+                                      </div>;
+                                    })}
+                                  </div>
+                                </div>
+                    
+                                <label className="block text-[10px] font-semibold text-[#a8b8c7]">
+                                  {t.outcome}
+                                  <textarea className="field mt-1 min-h-[38px] resize-none !px-2.5 !py-1.5 text-xs" rows={1} value={outcomeText}
+                                    onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
+                                </label>
+                                <section className="event-feed overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
+                                  <div className="flex items-center justify-between border-b border-[#263646] px-2 py-1.5">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Eventos registados" : "Recorded events"}</span>
+                                    <div className="flex items-center gap-2">
+                                      <button type="button" onClick={exportCsv} disabled={eventFeedRecords.length === 0}
+                                        className="inline-flex items-center gap-1 rounded border border-[#31475a] px-2 py-1 text-[9px] text-[#c1cfdb] hover:border-[#5f819e] disabled:cursor-not-allowed disabled:opacity-35"
+                                        title={t.export} aria-label={t.export}>
+                                        <ArrowDownToLine size={12} />{t.export}
+                                      </button>
+                                      <span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#66e99f]">{records.length}</span>
+                                    </div>
+                                  </div>
+                                  {eventFeedRecords.length === 0 ? <p className="muted px-2 py-3 text-[10px]">{t.empty}</p> : <div className="max-h-[30svh] overflow-y-auto">
+                                    <table className="event-feed-table w-full table-fixed">
+                                      <thead><tr><th className="w-[54px]">{t.time}</th><th>{t.event}</th><th className="w-[56px]">{t.momentColumn}</th><th className="w-[28px] text-right"></th></tr></thead>
+                                      <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
+                                        <td><button type="button" className="event-time-link font-mono text-[10px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
+                                        <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>
+                                          <span>{language === "pt" ? record.event_name_pt : record.event_name_en}</span>
+                                          {goalScores.has(record.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(record.id)!, analyzedTeamIsHome)}</span>}
+                                        </td>
+                                        <td className="event-moment-cell" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
+                                        <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
+                                      </tr>)}</tbody>
+                                    </table>
+                                  </div>}
+                                </section>
+                                
+                                {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
+                              </section>}
+                                      {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
+                                    <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
+                                  </div>
+                                  <p className="muted mt-1 text-[10px]">{t.aiHint}</p>
+                                  <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
+                                      {t.aiAnalyzedKit}
+                                      <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiAnalyzedKit} onChange={(event) => setAiAnalyzedKit(event.target.value)} />
+                                    </label>
+                                    <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
+                                      {t.aiOpponentKit}
+                                      <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiOpponentKit} onChange={(event) => setAiOpponentKit(event.target.value)} />
+                                    </label>
+                                  </div>
+                                  <label className="mt-2 flex cursor-pointer items-start gap-2 text-[9px] leading-relaxed text-[#a8b8c7]">
+                                    <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} />
+                                    <span>{t.aiConsent}</span>
+                                  </label>
+                                  {!isFirebaseAIConfigured() && <p className="mt-2 text-[10px] text-amber-300">{t.aiNotConfigured}</p>}
+                                  <button type="button" className="btn btn-primary mt-2 w-full !py-2 text-[10px]"
+                                    disabled={!canRecord || aiBusy || !aiConsent || !isFirebaseAIConfigured()}
+                                    onClick={() => void runAiGoalDetection()}>
+                                    <Activity size={13} />{aiBusy ? t.aiRunning : t.aiRun}
+                                  </button>
+                                  {aiError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{aiError}</p>}
+                                  {aiStatus && <p role="status" className="mt-2 text-[10px] text-[#79e9aa]">{aiStatus}</p>}
+                                  {aiCandidates.length > 0 && <div className="mt-2 grid gap-2">
+                                    {aiCandidates.map((candidate) => (
+                                      <article key={candidate.id} className="rounded-md border border-[#31475a] bg-[#101923] p-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <button type="button" className="font-mono text-[11px] font-semibold text-[#7beaa8] hover:underline"
+                                            onClick={() => { playerRef.current?.seekTo(candidate.second, true); setCurrentSecond(candidate.second); }}>
+                                            {formatTime(candidate.second)}
+                                          </button>
+                                          <span className="text-[9px] text-[#9eb0c0]">{t.aiConfidence}: {Math.round(candidate.confidence * 100)}%</span>
+                                        </div>
+                                        {(candidate.playerName || candidate.playerNumber) && <p className="mt-1 text-[10px] font-semibold">{t.aiMarker}: {candidate.playerNumber ? `N.º ${candidate.playerNumber} ` : ""}{candidate.playerName ?? ""}</p>}
+                                        <label className="mt-2 block text-[9px] text-[#a8b8c7]">
+                                          {t.aiSide}
+                                          <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.scoringSide}
+                                            onChange={(event) => updateAiCandidate(candidate.id, { scoringSide: event.target.value as AiGoalSuggestion["scoringSide"] })}>
+                                            <option value="uncertain">{t.aiUncertain}</option>
+                                            <option value="analysed">{team}</option>
+                                            <option value="opponent">{opponent}</option>
+                                          </select>
+                                        </label>
+                                        <label className="mt-2 block text-[9px] text-[#a8b8c7]">
+                                          {t.aiZone}
+                                          <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.zone}
+                                            onChange={(event) => updateAiCandidate(candidate.id, { zone: event.target.value as Zone })}>
+                                            <option value="left">{ZONE_LABELS.left[language]}</option>
+                                            <option value="center">{ZONE_LABELS.center[language]}</option>
+                                            <option value="right">{ZONE_LABELS.right[language]}</option>
+                                          </select>
+                                        </label>
+                                        {candidate.evidence && <p className="mt-2 text-[9px] leading-relaxed text-[#a8b8c7]">{t.aiEvidence}: {candidate.evidence}</p>}
+                                        <button type="button" className="btn mt-2 w-full !py-1.5 text-[9px]"
+                                          disabled={candidate.confirmed || candidate.scoringSide === "uncertain" || !canRecord}
+                                          onClick={() => void confirmAiGoal(candidate)}>
+                                          {candidate.confirmed ? t.aiConfirmed : t.aiConfirm}
+                                        </button>
+                                      </article>
+                                    ))}
+                                  </div>}
+                                </section>}
+                  </div>
                 </div>
               )}
 
-              {analysisTab === "events" && (
-                <div className="analysis-workspace without-event-controls grid min-w-0">
-                  {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
-            <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
-              <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#f0b08d]"><span className="event-legend-plus event-legend-defense">+</span>{language === "pt" ? "Defesa (Contra)" : "Defence (against)"}</span>
-            </div>
-            <div className="event-single-list overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
-              <div className="event-grid event-single-grid grid grid-cols-[minmax(76px,1.35fr)_repeat(3,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
-                <div className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.event}</div>
-                {(["left", "center", "right"] as Zone[]).map((eventZone) => <div key={eventZone} className="truncate px-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{ZONE_LABELS[eventZone][language]}</div>)}
-                {eventRows.map((event) => {
-                  const allowedZones = zonesForEvent(event);
-                  const name = language === "pt" ? event.name_pt : event.name_en;
-                  return <div key={event.id} className="contents">
-                    <div className="truncate py-1 pr-1 text-[10px] font-medium" title={name}>{name}</div>
-                    {(["left", "center", "right"] as Zone[]).map((eventZone) => allowedZones.includes(eventZone)
-                      ? <div key={eventZone} className="flex items-center justify-center gap-1">
-                          <button type="button" disabled={!canRecord} title={`${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
-                            aria-label={`Registar ${t.attackMoment} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
-                            onClick={() => void registerEvent(event, eventZone, "attack")}
-                            className="event-shortcut event-shortcut-attack flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
-                            <Plus size={10} />
-                          </button>
-                          <button type="button" disabled={!canRecord} title={`${language === "pt" ? "Defesa (Contra)" : "Defence (against)"} · ${name} · ${ZONE_LABELS[eventZone][language]}`}
-                            aria-label={`Registar Defesa Contra · ${name} · ${ZONE_LABELS[eventZone][language]}`}
-                            onClick={() => void registerEvent(event, eventZone, "defense")}
-                            className="event-shortcut event-shortcut-defense flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
-                            <Plus size={10} />
-                          </button>
-                        </div>
-                      : <div key={eventZone} className="flex items-center justify-center text-[10px] text-[#526170]">—</div>)}
-                  </div>;
-                })}
-              </div>
-            </div>
-
-            <label className="block text-[10px] font-semibold text-[#a8b8c7]">
-              {t.outcome}
-              <textarea className="field mt-1 min-h-[38px] resize-none !px-2.5 !py-1.5 text-xs" rows={1} value={outcomeText}
-                onChange={(e) => setOutcomeText(e.target.value)} placeholder={t.outcomePlaceholder} />
-            </label>
-            <section className="event-feed overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
-              <div className="flex items-center justify-between border-b border-[#263646] px-2 py-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Eventos registados" : "Recorded events"}</span>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={exportCsv} disabled={eventFeedRecords.length === 0}
-                    className="inline-flex items-center gap-1 rounded border border-[#31475a] px-2 py-1 text-[9px] text-[#c1cfdb] hover:border-[#5f819e] disabled:cursor-not-allowed disabled:opacity-35"
-                    title={t.export} aria-label={t.export}>
-                    <ArrowDownToLine size={12} />{t.export}
-                  </button>
-                  <span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#66e99f]">{records.length}</span>
-                </div>
-              </div>
-              {eventFeedRecords.length === 0 ? <p className="muted px-2 py-3 text-[10px]">{t.empty}</p> : <div className="max-h-[30svh] overflow-y-auto">
-                <table className="event-feed-table w-full table-fixed">
-                  <thead><tr><th className="w-[54px]">{t.time}</th><th>{t.event}</th><th className="w-[56px]">{t.momentColumn}</th><th className="w-[28px] text-right"></th></tr></thead>
-                  <tbody>{eventFeedRecords.map((record) => <tr key={record.id}>
-                    <td><button type="button" className="event-time-link font-mono text-[10px] font-medium text-[#7beaa8] hover:underline" onClick={() => seekToEvent(record)} title={language === "pt" ? "Reproduzir este momento no vídeo" : "Play this moment in the video"}>{formatTime(record.video_second)}</button></td>
-                    <td className="truncate text-[10px]" title={language === "pt" ? record.event_name_pt : record.event_name_en}>
-                      <span>{language === "pt" ? record.event_name_pt : record.event_name_en}</span>
-                      {goalScores.has(record.id) && <span className="ml-1 inline-flex rounded border border-[#426b55] bg-[#12291e] px-1 py-0.5 font-mono text-[9px] font-semibold text-[#8af0ad]">{formatGoalScore(goalScores.get(record.id)!, analyzedTeamIsHome)}</span>}
-                    </td>
-                    <td className="event-moment-cell" title={record.moment === "attack" ? t.attackMoment : t.defenseMoment}>{record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</td>
-                    <td className="event-delete-cell"><button type="button" aria-label={t.delete} title={t.delete} className="event-delete ml-auto flex h-5 w-5 items-center justify-center rounded text-[#ff9999] hover:bg-[#ff777722]" onClick={() => void removeEvent(record)}><X size={13} /></button></td>
-                  </tr>)}</tbody>
-                </table>
-              </div>}
-            </section>
-            
-            {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
-          </section>}
-                  {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
-                <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
-              </div>
-              <p className="muted mt-1 text-[10px]">{t.aiHint}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
-                  {t.aiAnalyzedKit}
-                  <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiAnalyzedKit} onChange={(event) => setAiAnalyzedKit(event.target.value)} />
-                </label>
-                <label className="block min-w-0 text-[9px] text-[#a8b8c7]">
-                  {t.aiOpponentKit}
-                  <input className="field mt-1 !px-2 !py-1.5 text-[11px]" value={aiOpponentKit} onChange={(event) => setAiOpponentKit(event.target.value)} />
-                </label>
-              </div>
-              <label className="mt-2 flex cursor-pointer items-start gap-2 text-[9px] leading-relaxed text-[#a8b8c7]">
-                <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={aiConsent} onChange={(event) => setAiConsent(event.target.checked)} />
-                <span>{t.aiConsent}</span>
-              </label>
-              {!isFirebaseAIConfigured() && <p className="mt-2 text-[10px] text-amber-300">{t.aiNotConfigured}</p>}
-              <button type="button" className="btn btn-primary mt-2 w-full !py-2 text-[10px]"
-                disabled={!canRecord || aiBusy || !aiConsent || !isFirebaseAIConfigured()}
-                onClick={() => void runAiGoalDetection()}>
-                <Activity size={13} />{aiBusy ? t.aiRunning : t.aiRun}
-              </button>
-              {aiError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{aiError}</p>}
-              {aiStatus && <p role="status" className="mt-2 text-[10px] text-[#79e9aa]">{aiStatus}</p>}
-              {aiCandidates.length > 0 && <div className="mt-2 grid gap-2">
-                {aiCandidates.map((candidate) => (
-                  <article key={candidate.id} className="rounded-md border border-[#31475a] bg-[#101923] p-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button type="button" className="font-mono text-[11px] font-semibold text-[#7beaa8] hover:underline"
-                        onClick={() => { playerRef.current?.seekTo(candidate.second, true); setCurrentSecond(candidate.second); }}>
-                        {formatTime(candidate.second)}
-                      </button>
-                      <span className="text-[9px] text-[#9eb0c0]">{t.aiConfidence}: {Math.round(candidate.confidence * 100)}%</span>
-                    </div>
-                    {(candidate.playerName || candidate.playerNumber) && <p className="mt-1 text-[10px] font-semibold">{t.aiMarker}: {candidate.playerNumber ? `N.º ${candidate.playerNumber} ` : ""}{candidate.playerName ?? ""}</p>}
-                    <label className="mt-2 block text-[9px] text-[#a8b8c7]">
-                      {t.aiSide}
-                      <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.scoringSide}
-                        onChange={(event) => updateAiCandidate(candidate.id, { scoringSide: event.target.value as AiGoalSuggestion["scoringSide"] })}>
-                        <option value="uncertain">{t.aiUncertain}</option>
-                        <option value="analysed">{team}</option>
-                        <option value="opponent">{opponent}</option>
-                      </select>
-                    </label>
-                    <label className="mt-2 block text-[9px] text-[#a8b8c7]">
-                      {t.aiZone}
-                      <select className="field mt-1 !px-2 !py-1.5 text-[10px]" value={candidate.zone}
-                        onChange={(event) => updateAiCandidate(candidate.id, { zone: event.target.value as Zone })}>
-                        <option value="left">{ZONE_LABELS.left[language]}</option>
-                        <option value="center">{ZONE_LABELS.center[language]}</option>
-                        <option value="right">{ZONE_LABELS.right[language]}</option>
-                      </select>
-                    </label>
-                    {candidate.evidence && <p className="mt-2 text-[9px] leading-relaxed text-[#a8b8c7]">{t.aiEvidence}: {candidate.evidence}</p>}
-                    <button type="button" className="btn mt-2 w-full !py-1.5 text-[9px]"
-                      disabled={candidate.confirmed || candidate.scoringSide === "uncertain" || !canRecord}
-                      onClick={() => void confirmAiGoal(candidate)}>
-                      {candidate.confirmed ? t.aiConfirmed : t.aiConfirm}
-                    </button>
-                  </article>
-                ))}
-              </div>}
-            </section>}
-                  {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
-                </div>
-              )}
-
-              {analysisTab === "report" && (
+              alysisTab === "report" && (
                 <div className="grid gap-4">
                   {hasActiveMatch && importedLiveLoading && (
             <section className="panel p-3 text-xs text-[#a8b8c7]">{language === "pt" ? "A carregar tempos do jogo ao vivo…" : "Loading live-match player times…"}</section>
