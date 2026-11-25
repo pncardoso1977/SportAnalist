@@ -48,6 +48,7 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
   const [showTransition, setShowTransition] = useState(false);
   const [finished, setFinished] = useState(false);
   const playerRef = useRef<SummaryPlayer | null>(null);
+  const playerHostRef = useRef<HTMLDivElement | null>(null);
   const clipTimerRef = useRef<number | null>(null);
   const transitionTimerRef = useRef<number | null>(null);
   const currentIndexRef = useRef(0);
@@ -94,9 +95,15 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
     };
 
     const initialize = () => {
-      if (cancelled || !win.YT?.Player) return;
+      if (cancelled || !win.YT?.Player || !playerHostRef.current) return;
       playerRef.current?.destroy();
-      playerRef.current = new win.YT.Player("sportanalist-public-summary-player", {
+      playerRef.current = null;
+      playerHostRef.current.replaceChildren();
+      const playerMount = document.createElement("div");
+      playerMount.id = "sportanalist-public-summary-player";
+      playerMount.className = "h-full w-full";
+      playerHostRef.current.appendChild(playerMount);
+      playerRef.current = new win.YT.Player(playerMount.id, {
         videoId: activeVideoId,
         playerVars: {
           autoplay: 1,
@@ -183,7 +190,7 @@ export default function PublicSummaryPage({ params }: { params: Promise<{ token:
   return (
     <main className="fixed inset-0 overflow-hidden bg-black">
       <div className="absolute inset-0">
-        <div id="sportanalist-public-summary-player" className="h-full w-full" />
+        <div ref={playerHostRef} className="h-full w-full" />
       </div>
 
       {!started && !finished && (
