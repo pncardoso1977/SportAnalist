@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Activity, ArrowDownToLine, ArrowLeft, CircleHelp, ClipboardList, Clock3, Copy, FilePlus2,
+  Activity, ArrowDownToLine, ArrowLeft, CircleHelp, Clock3, Copy, FilePlus2,
   FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type MatchVideo, type Zone } from "@/lib/types";
