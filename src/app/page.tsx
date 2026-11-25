@@ -1046,13 +1046,195 @@ export default function HomePage() {
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col gap-4">
-          {!hasActiveMatch && <div className="panel flex items-center gap-3 p-3 text-sm">
-            <Video size={18} className="shrink-0 text-[#65e99c]" />
-            <p className="muted">{t.noActiveMatch}</p>
-          </div>}
+          {workspaceSection === "post-match" && postMatchPage === "home" && (
+            <section className="mx-auto grid w-full max-w-5xl gap-5 py-5 sm:py-10">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[.18em] text-[#6ce6a0]">SportAnalist</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{language === "pt" ? "Análise pós Match" : "Post-match analysis"}</h2>
+                <p className="muted mt-2 text-sm">{language === "pt" ? "Começa uma análise nova ou consulta os jogos que já foram registados. O vídeo só aparece depois de escolheres um jogo." : "Start a new analysis or review registered matches. The video appears after selecting a match."}</p>
+              </div>
 
-          <div className={`analysis-workspace grid min-w-0 items-start gap-3 ${hasActiveMatch && loadedUrl ? "with-event-controls" : "without-event-controls"}`}>
-          <section className="analysis-video-panel panel min-w-0 overflow-hidden">
+              {supabase && !projectId && (
+                <div className="max-w-2xl">
+                  <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} hideAuthenticatedBar />
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={startNewMatch}
+                  className="panel group flex min-h-44 flex-col items-start justify-between gap-4 p-5 text-left transition hover:border-[#35d07f80] hover:bg-[#13231d]">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#35d07f1c] text-[#71e6a2]"><Plus size={24} /></span>
+                  <span>
+                    <span className="block text-lg font-semibold">{language === "pt" ? "Começar novo" : "Start new"}</span>
+                    <span className="muted mt-1 block text-xs">{language === "pt" ? "Registar jogo, escalão, competição, data e vídeos." : "Register match, age group, competition, date and videos."}</span>
+                  </span>
+                </button>
+                <button type="button" onClick={() => { setPostMatchPage("saved"); setWorkspaceSection("post-match"); }}
+                  className="panel group flex min-h-44 flex-col items-start justify-between gap-4 p-5 text-left transition hover:border-[#35d07f80] hover:bg-[#13231d]">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#35d07f1c] text-[#71e6a2]"><FolderOpen size={24} /></span>
+                  <span>
+                    <span className="block text-lg font-semibold">{language === "pt" ? "Jogos registados" : "Registered matches"}</span>
+                    <span className="muted mt-1 block text-xs">{language === "pt" ? `${matches.length} jogos disponíveis no histórico.` : `${matches.length} matches in the history.`}</span>
+                  </span>
+                </button>
+              </div>
+              {matchesSyncError && <p role="alert" className="rounded-xl border border-amber-800/70 bg-amber-950/30 p-3 text-xs text-amber-200">{matchesSyncError}</p>}
+            </section>
+          )}
+
+          {workspaceSection === "post-match" && postMatchPage === "new" && (
+            <section className="mx-auto grid w-full max-w-3xl gap-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <button type="button" className="muted mb-2 inline-flex items-center gap-1 text-xs hover:text-white" onClick={() => setPostMatchPage("home")}><ArrowLeft size={13} />{language === "pt" ? "Análise pós Match" : "Post-match analysis"}</button>
+                  <h2 className="text-2xl font-bold">{isAddingVideosToExistingMatch ? (language === "pt" ? "Adicionar vídeos ao jogo" : "Add videos to match") : (language === "pt" ? "Começar novo jogo" : "Register a new match")}</h2>
+                  <p className="muted mt-1 text-xs">{language === "pt" ? "Preenche os dados do jogo antes de abrir o vídeo." : "Enter the match details before opening the video."}</p>
+                </div>
+                <button type="button" className="btn !py-2 text-xs" onClick={() => setPostMatchPage("home")}>{language === "pt" ? "Cancelar" : "Cancel"}</button>
+              </div>
+
+              {supabase && !projectId ? (
+                <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} hideAuthenticatedBar />
+              ) : (
+                <section className="panel grid gap-4 p-4 sm:p-5">
+                  {isAddingVideosToExistingMatch ? (
+                    <div className="rounded-xl border border-[#315b47] bg-[#10251a] p-3">
+                      <p className="text-sm font-semibold">{selectedSavedMatch?.home_team} vs {selectedSavedMatch?.away_team}</p>
+                      <p className="muted mt-1 text-xs">{[selectedSavedMatch?.age_group, selectedSavedMatch?.competition].filter(Boolean).join(" · ")}</p>
+                      <p className="muted mt-1 text-xs">{language === "pt" ? "Os vídeos adicionados serão associados a este jogo. Os eventos já existentes são mantidos." : "New videos will be added to this match. Existing events are preserved."}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{t.analyzed}
+                          <input className="field mt-1.5" value={team} onChange={(e) => setTeam(e.target.value)} required />
+                        </label>
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{t.opponent}
+                          <input className="field mt-1.5" value={opponent} onChange={(e) => setOpponent(e.target.value)} required />
+                        </label>
+                      </div>
+                      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#31475a] bg-[#0b131c] px-3 py-3 text-sm font-medium text-[#d4dde5]">
+                        <input type="checkbox" className="h-4 w-4 accent-[#35d07f]" checked={analyzedTeamIsHome} onChange={(e) => setAnalyzedTeamIsHome(e.target.checked)} />
+                        <span>{language === "pt" ? "A equipa analisada joga em casa" : "The analysed team plays at home"}</span>
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{language === "pt" ? "Escalão *" : "Age group *"}
+                          <input className="field mt-1.5" list="sportanalist-age-groups" value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} placeholder="Ex.: Sub-17" required />
+                          <datalist id="sportanalist-age-groups">{ageGroupOptions.map((item) => <option key={item} value={item} />)}</datalist>
+                        </label>
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{language === "pt" ? "Competição *" : "Competition *"}
+                          <input className="field mt-1.5" list="sportanalist-competitions" value={competition} onChange={(e) => setCompetition(e.target.value)} placeholder={language === "pt" ? "Escolhe existente ou escreve nova" : "Choose existing or enter new"} required />
+                          <datalist id="sportanalist-competitions">{competitionOptions.map((item) => <option key={item} value={item} />)}</datalist>
+                        </label>
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{language === "pt" ? "Data do jogo *" : "Match date *"}
+                          <input type="date" className="field mt-1.5" value={playedAt} onChange={(e) => setPlayedAt(e.target.value)} required />
+                        </label>
+                        <label className="block text-xs font-semibold text-[#b8c7d3]">{language === "pt" ? "Local do jogo (opcional)" : "Venue (optional)"}
+                          <input className="field mt-1.5" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder={language === "pt" ? "Pavilhão / local" : "Sports hall / venue"} />
+                        </label>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[#b8c7d3]">{language === "pt" ? "Vídeos YouTube" : "YouTube videos"}</p>
+                      <span className="muted text-[10px]">{language === "pt" ? "Podes adicionar mais do que um" : "Multiple videos supported"}</span>
+                    </div>
+                    {videoLinks.map((url, index) => (
+                      <div key={index} className="flex min-w-0 items-center gap-2">
+                        <input className="field min-w-0 flex-1" placeholder={language === "pt" ? `Link do vídeo ${index + 1}` : `Video link ${index + 1}`} value={url} onChange={(e) => updateVideoLink(index, e.target.value)} />
+                        {videoLinks.length > 1 && <button type="button" className="btn !h-10 !w-10 !p-0 text-rose-300" aria-label={language === "pt" ? "Remover vídeo" : "Remove video"} onClick={() => removeVideoLinkField(index)}><X size={15} /></button>}
+                      </div>
+                    ))}
+                    <button type="button" className="btn w-fit !py-2 text-xs" onClick={addVideoLinkField}><Plus size={14} />{language === "pt" ? "Adicionar outro vídeo" : "Add another video"}</button>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-[#263646] pt-3">
+                    <button type="button" className="btn" onClick={() => setPostMatchPage("home")}>{language === "pt" ? "Cancelar" : "Cancel"}</button>
+                    <button type="button" className="btn btn-primary" disabled={supabase ? !projectId || !cloudUserId || (role !== "admin" && role !== "analyst") : role === "viewer" || role === "configurator"} onClick={() => void loadVideo()}>
+                      <Video size={15} />{isAddingVideosToExistingMatch ? (language === "pt" ? "Guardar vídeos e abrir jogo" : "Save videos and open match") : (language === "pt" ? "Registar jogo e abrir vídeo" : "Register match and open video")}
+                    </button>
+                  </div>
+                </section>
+              )}
+            </section>
+          )}
+
+          {workspaceSection === "post-match" && postMatchPage === "saved" && (
+            <section className="mx-auto grid w-full max-w-5xl gap-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <button type="button" className="muted mb-2 inline-flex items-center gap-1 text-xs hover:text-white" onClick={() => setPostMatchPage("home")}><ArrowLeft size={13} />{language === "pt" ? "Análise pós Match" : "Post-match analysis"}</button>
+                  <h2 className="text-2xl font-bold">{t.savedMatches}</h2>
+                  <p className="muted mt-1 text-xs">{language === "pt" ? "Seleciona um jogo para abrir o vídeo, os eventos e o relatório." : "Select a match to open its video, events and report."}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="btn !py-2 text-xs" onClick={() => setMatchesRefreshKey((current) => current + 1)}><RefreshCw size={13} />{language === "pt" ? "Atualizar" : "Refresh"}</button>
+                  <button type="button" className="btn btn-primary !py-2 text-xs" onClick={startNewMatch}><Plus size={13} />{language === "pt" ? "Começar novo" : "Start new"}</button>
+                </div>
+              </div>
+              {supabase && !projectId && <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} hideAuthenticatedBar />}
+              {matchesSyncError && <p role="alert" className="rounded-xl border border-amber-800/70 bg-amber-950/30 p-3 text-xs text-amber-200">{matchesSyncError}</p>}
+              {!matches.length ? <section className="panel p-6 text-center">
+                <FolderOpen size={30} className="mx-auto text-[#7891a6]" />
+                <p className="mt-3 text-sm font-medium">{t.noMatches}</p>
+                <p className="muted mt-1 text-xs">{language === "pt" ? "Os jogos registados aparecerão aqui." : "Registered matches will appear here."}</p>
+              </section> : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {matches.map((match) => (
+                    <article key={match.id} className={`panel grid gap-3 p-4 transition ${cloudMatchId === match.id ? "border-[#35d07f80]" : ""}`}>
+                      <button type="button" className="text-left" onClick={() => void openSavedMatch(match)}>
+                        <p className="text-base font-semibold">{match.home_team} <span className="muted font-normal">vs</span> {match.away_team}</p>
+                        <p className="muted mt-1 text-xs">{[match.age_group, match.competition].filter(Boolean).join(" · ")}</p>
+                        <p className="muted mt-1 text-xs">{match.played_at ? new Intl.DateTimeFormat("pt-PT", { dateStyle: "medium" }).format(new Date(match.played_at + "T12:00:00")) : new Intl.DateTimeFormat("pt-PT", { dateStyle: "medium" }).format(new Date(match.created_at))}</p>
+                        {match.venue && <p className="muted mt-1 text-xs">{match.venue}</p>}
+                        <p className="muted mt-2 text-[10px]">{language === "pt" ? "Equipa analisada:" : "Analysed team:"} {match.analyzed_team} · {match.home_team === match.analyzed_team ? (language === "pt" ? "Casa" : "Home") : (language === "pt" ? "Fora" : "Away")}</p>
+                        {match.source_public_live_match_id && <p className="mt-2 text-[10px] font-semibold text-[#83e6a9]">{language === "pt" ? "Jogo ao vivo · Terminado" : "Live match · Finished"}</p>}
+                      </button>
+                      <div className="flex items-center justify-between gap-2 border-t border-[#263646] pt-2">
+                        <span className="muted truncate text-[10px]">{match.youtube_url ? (language === "pt" ? "Vídeo associado" : "Video attached") : (language === "pt" ? "Sem vídeo associado" : "No video attached")}</span>
+                        <button type="button" className="btn !py-1.5 text-[10px]" onClick={() => void openSavedMatch(match)}>{t.openMatch}</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {workspaceSection === "post-match" && postMatchPage === "analysis" && hasActiveMatch && (
+            <>
+              <section className="panel grid gap-3 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="muted text-[10px] uppercase tracking-wider">{language === "pt" ? "Jogo em análise" : "Match analysis"}</p>
+                    <h2 className="mt-1 truncate text-lg font-bold">{selectedSavedMatch?.home_team ?? (analyzedTeamIsHome ? team : opponent)} <span className="muted font-normal">vs</span> {selectedSavedMatch?.away_team ?? (analyzedTeamIsHome ? opponent : team)}</h2>
+                    <p className="muted mt-1 text-[10px]">{[selectedSavedMatch?.age_group, selectedSavedMatch?.competition].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="btn !py-2 text-xs" onClick={() => { setPostMatchPage("saved"); setAnalysisTab("video"); }}><FolderOpen size={13} />{language === "pt" ? "Lista de jogos" : "Match list"}</button>
+                    <button type="button" className="btn !py-2 text-xs" onClick={() => { setPostMatchPage("new"); setVideoLinks([""]); }}><Plus size={13} />{language === "pt" ? "Adicionar vídeos" : "Add videos"}</button>
+                    <button type="button" className="btn !py-2 text-xs" onClick={startNewMatch}>{language === "pt" ? "Novo jogo" : "New match"}</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-[#263646] pt-3">
+                  {([
+                    { id: "video", label: language === "pt" ? "Vídeo" : "Video", icon: Video },
+                    { id: "events", label: language === "pt" ? "Registos" : "Events", icon: ClipboardList },
+                    { id: "report", label: language === "pt" ? "Relatório" : "Report", icon: Activity },
+                  ] as const).map((tab) => {
+                    const Icon = tab.icon;
+                    return <button key={tab.id} type="button" onClick={() => setAnalysisTab(tab.id)}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${analysisTab === tab.id ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3] hover:border-[#5f819e]"}`}>
+                      <Icon size={14} />{tab.label}
+                    </button>;
+                  })}
+                </div>
+              </section>
+
+              {analysisTab === "video" && (
+                <div className="analysis-workspace without-event-controls grid min-w-0">
+                  <section className="analysis-video-panel panel min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-[#263646] px-3 py-2">
               <div><h2 className="text-sm font-semibold">{t.video}</h2><p className="muted mt-0.5 max-w-[65vw] truncate text-[10px]">{loadedUrl || t.videoHelp}</p></div>
               <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-1.5 inline" size={13} />{formatTime(currentSecond)}</span>
@@ -1077,8 +1259,12 @@ export default function HomePage() {
               </div>
             )}
           </section>
+                </div>
+              )}
 
-          {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
+              {analysisTab === "events" && (
+                <div className="analysis-workspace without-event-controls grid min-w-0">
+                  {hasActiveMatch && Boolean(loadedUrl) && <section className="event-capture-panel panel flex flex-col gap-2 p-2.5">
             <div className="event-legend flex flex-wrap items-center gap-3 px-1 py-1">
               <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Legenda" : "Legend"}</span>
               <span className="inline-flex items-center gap-1 text-[10px] text-[#79e9aa]"><span className="event-legend-plus event-legend-attack">+</span>{t.attackMoment}</span>
@@ -1149,108 +1335,7 @@ export default function HomePage() {
             
             {!canRecord && <p className="text-[10px] text-amber-300">{t.readOnly}</p>}
           </section>}
-          {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
-          </div>
-
-          {hasActiveMatch && importedLiveLoading && (
-            <section className="panel p-3 text-xs text-[#a8b8c7]">{language === "pt" ? "A carregar tempos do jogo ao vivo…" : "Loading live-match player times…"}</section>
-          )}
-          {hasActiveMatch && importedLiveData && (
-            <section className="panel grid gap-3 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold">{language === "pt" ? "Tempos de utilização dos jogadores" : "Player court-time report"}</h2>
-                  <p className="muted mt-1 text-[10px]">{language === "pt" ? "Registo importado do jogo ao vivo · ordenado por tempo em campo" : "Imported from live match · sorted by court time"}</p>
-                </div>
-                <span className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[10px] text-[#8ee8ae]">{formatDuration(importedLiveData.clock.elapsed_seconds)} · {language === "pt" ? "tempo total" : "total time"}</span>
-              </div>
-              {importedLiveData.clock.first_half_seconds === null && (
-                <p className="rounded border border-amber-700/60 bg-amber-950/30 p-2 text-[10px] text-amber-200">
-                  {language === "pt" ? "O intervalo não foi registado. A totalidade do tempo está na 1.ª parte; a 2.ª parte apresenta zero." : "Halftime was not recorded. All time is assigned to the first half; the second half is zero."}
-                </p>
-              )}
-              {[
-                { title: "1ª Parte", start: 0, end: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds },
-                { title: "2ª Parte", start: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds, end: importedLiveData.clock.elapsed_seconds },
-                { title: "Tempo total do jogo", start: 0, end: importedLiveData.clock.elapsed_seconds },
-              ].map((section) => {
-                const rows = importedLiveData.players.map((player) => ({
-                  id: player.id, name: player.display_name || player.full_name,
-                  seconds: playerCourtSecondsInRange(importedLiveData.stints, player.id, section.start, section.end),
-                })).sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name, "pt-PT"));
-                return (
-                  <div key={section.title} className="overflow-x-auto rounded-lg border border-[#263646]">
-                    <div className="flex items-center justify-between gap-2 bg-[#142330] px-3 py-2">
-                      <h3 className="text-xs font-semibold text-white">{section.title}</h3>
-                      <span className="font-mono text-[10px] text-[#8ee8ae]">{formatDuration(section.end - section.start)}</span>
-                    </div>
-                    <table className="w-full min-w-[280px] text-left text-[10px]">
-                      <thead className="bg-[#1d8050] text-white">
-                        <tr><th className="px-2 py-2">#</th><th className="px-2 py-2">{language === "pt" ? "Jogador" : "Player"}</th><th className="px-2 py-2 text-right">{language === "pt" ? "Tempo em campo" : "Court time"}</th></tr>
-                      </thead>
-                      <tbody>{rows.map((row, index) => (
-                        <tr key={row.id} className={index % 2 === 0 ? "bg-[#101923]" : "bg-[#182533]"}>
-                          <td className="px-2 py-2 text-[#93a8b8]">{index + 1}</td>
-                          <td className="px-2 py-2 font-medium text-white">{row.name}</td>
-                          <td className="px-2 py-2 text-right font-mono text-[#b7f0cc]">{formatDuration(row.seconds)}</td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </section>
-          )}
-          {hasActiveMatch && Boolean(loadedUrl) && <>
-            <section className="grid gap-2 sm:grid-cols-3">
-              {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
-            </section>
-
-
-          </>}
-
-          {canManagePublicShare && <section className="panel grid gap-3 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">{language === "pt" ? "Link público deste jogo" : "Public link for this match"}</h2>
-                <p className="muted mt-1 text-[10px]">
-                  {language === "pt"
-                    ? "Qualquer pessoa com este endereço pode consultar o vídeo e a cronologia. Não dá acesso à edição nem a outros jogos."
-                    : "Anyone with this address can view the video and timeline. It does not grant editing access or access to other matches."}
-                </p>
-              </div>
-              <Share2 size={18} className="text-[#62e69b]" />
-            </div>
-            {publicShareToken ? (
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-                <input className="field min-w-0 flex-1 !py-2 text-xs" readOnly aria-label={language === "pt" ? "Link público" : "Public link"} value={publicShareUrl} />
-                <button type="button" className="btn !py-2 text-xs" disabled={shareBusy} onClick={() => void copyPublicShareLink()}>
-                  <Copy size={13} />{language === "pt" ? "Copiar link" : "Copy link"}
-                </button>
-                <button type="button" className="btn !py-2 text-xs text-[#ffadad]" disabled={shareBusy} onClick={() => void revokePublicShare()}>
-                  {language === "pt" ? "Desativar link" : "Disable link"}
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={shareBusy} onClick={() => void createPublicShare()}>
-                  <Share2 size={13} />{shareBusy
-                    ? (language === "pt" ? "A preparar…" : "Preparing…")
-                    : (language === "pt" ? "Criar link público" : "Create public link")}
-                </button>
-                <span className="muted text-[10px]">{language === "pt" ? "O link pode ser desativado a qualquer momento." : "The link can be disabled at any time."}</span>
-              </div>
-            )}
-          </section>}
-
-          {canConfigure && <section className="panel grid gap-3 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-            <div className="md:col-span-3 flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">{t.configure}</h2><p className="muted mt-0.5 text-[10px]">{t.configHint}</p></div><ShieldCheck className="text-[#62e69b]" size={20} /></div>
-            <label className="text-[11px] text-[#9eb0c0]">{t.newEvent}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNamePt} onChange={(e) => setNewNamePt(e.target.value)} placeholder="Ex.: Remate" /></label>
-            <label className="text-[11px] text-[#9eb0c0]">{t.newEventEn}<input className="field mt-1 !px-2.5 !py-2 text-xs" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
-            <button className="btn btn-primary h-[38px] text-xs" onClick={() => void createEventType()}><FilePlus2 size={13} />{t.create}</button>
-          </section>}
-
-          {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
+                  {hasActiveMatch && Boolean(loadedUrl) && <section className="rounded-lg border border-[#31475a] bg-[#0b131c] p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.aiTitle}</h3>
                 <span className="rounded-full border border-[#315b47] bg-[#112820] px-2 py-0.5 text-[9px] text-[#79e9aa]">Gemini · YouTube</span>
@@ -1317,11 +1402,197 @@ export default function HomePage() {
                 ))}
               </div>}
             </section>}
+                  {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
+                </div>
+              )}
 
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#263646] pt-3">
-            <div className="flex items-center gap-2 text-[10px] text-[#8fa1b3]"><CircleHelp size={13} />{t.setupHint}</div>
-            <span className="text-[10px] text-[#6d8194]">SportAnalist · v0.1.0</span>
-          </footer>
+              {analysisTab === "report" && (
+                <div className="grid gap-4">
+                  {hasActiveMatch && importedLiveLoading && (
+            <section className="panel p-3 text-xs text-[#a8b8c7]">{language === "pt" ? "A carregar tempos do jogo ao vivo…" : "Loading live-match player times…"}</section>
+          )}
+          {hasActiveMatch && importedLiveData && (
+            <section className="panel grid gap-3 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold">{language === "pt" ? "Tempos de utilização dos jogadores" : "Player court-time report"}</h2>
+                  <p className="muted mt-1 text-[10px]">{language === "pt" ? "Registo importado do jogo ao vivo · ordenado por tempo em campo" : "Imported from live match · sorted by court time"}</p>
+                </div>
+                <span className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[10px] text-[#8ee8ae]">{formatDuration(importedLiveData.clock.elapsed_seconds)} · {language === "pt" ? "tempo total" : "total time"}</span>
+              </div>
+              {importedLiveData.clock.first_half_seconds === null && (
+                <p className="rounded border border-amber-700/60 bg-amber-950/30 p-2 text-[10px] text-amber-200">
+                  {language === "pt" ? "O intervalo não foi registado. A totalidade do tempo está na 1.ª parte; a 2.ª parte apresenta zero." : "Halftime was not recorded. All time is assigned to the first half; the second half is zero."}
+                </p>
+              )}
+              {[
+                { title: "1ª Parte", start: 0, end: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds },
+                { title: "2ª Parte", start: importedLiveData.clock.first_half_seconds ?? importedLiveData.clock.elapsed_seconds, end: importedLiveData.clock.elapsed_seconds },
+                { title: "Tempo total do jogo", start: 0, end: importedLiveData.clock.elapsed_seconds },
+              ].map((section) => {
+                const rows = importedLiveData.players.map((player) => ({
+                  id: player.id, name: player.display_name || player.full_name,
+                  seconds: playerCourtSecondsInRange(importedLiveData.stints, player.id, section.start, section.end),
+                })).sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name, "pt-PT"));
+                return (
+                  <div key={section.title} className="overflow-x-auto rounded-lg border border-[#263646]">
+                    <div className="flex items-center justify-between gap-2 bg-[#142330] px-3 py-2">
+                      <h3 className="text-xs font-semibold text-white">{section.title}</h3>
+                      <span className="font-mono text-[10px] text-[#8ee8ae]">{formatDuration(section.end - section.start)}</span>
+                    </div>
+                    <table className="w-full min-w-[280px] text-left text-[10px]">
+                      <thead className="bg-[#1d8050] text-white">
+                        <tr><th className="px-2 py-2">#</th><th className="px-2 py-2">{language === "pt" ? "Jogador" : "Player"}</th><th className="px-2 py-2 text-right">{language === "pt" ? "Tempo em campo" : "Court time"}</th></tr>
+                      </thead>
+                      <tbody>{rows.map((row, index) => (
+                        <tr key={row.id} className={index % 2 === 0 ? "bg-[#101923]" : "bg-[#182533]"}>
+                          <td className="px-2 py-2 text-[#93a8b8]">{index + 1}</td>
+                          <td className="px-2 py-2 font-medium text-white">{row.name}</td>
+                          <td className="px-2 py-2 text-right font-mono text-[#b7f0cc]">{formatDuration(row.seconds)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+                  {hasActiveMatch && Boolean(loadedUrl) && <>
+            <section className="grid gap-2 sm:grid-cols-3">
+              {[{ label: t.statsTotal, value: records.length, icon: Activity }, { label: t.attacks, value: totalAttacks, icon: Play }, { label: t.counters, value: totalCounters, icon: RefreshCw }].map(({ label, value, icon: Icon }) => <div key={label} className="panel flex items-center justify-between p-3"><div><p className="muted text-[10px]">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight">{value}</p></div><div className="rounded-lg bg-[#35d07f17] p-2 text-[#57e394]"><Icon size={17} /></div></div>)}
+            </section>
+
+
+          </>}
+
+          {canManagePublicShare && <section className="panel grid gap-3 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">{language === "pt" ? "Link público deste jogo" : "Public link for this match"}</h2>
+                <p className="muted mt-1 text-[10px]">
+                  {language === "pt"
+                    ? "Qualquer pessoa com este endereço pode consultar o vídeo e a cronologia. Não dá acesso à edição nem a outros jogos."
+                    : "Anyone with this address can view the video and timeline. It does not grant editing access or access to other matches."}
+                </p>
+              </div>
+              <Share2 size={18} className="text-[#62e69b]" />
+            </div>
+            {publicShareToken ? (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+                <input className="field min-w-0 flex-1 !py-2 text-xs" readOnly aria-label={language === "pt" ? "Link público" : "Public link"} value={publicShareUrl} />
+                <button type="button" className="btn !py-2 text-xs" disabled={shareBusy} onClick={() => void copyPublicShareLink()}>
+                  <Copy size={13} />{language === "pt" ? "Copiar link" : "Copy link"}
+                </button>
+                <button type="button" className="btn !py-2 text-xs text-[#ffadad]" disabled={shareBusy} onClick={() => void revokePublicShare()}>
+                  {language === "pt" ? "Desativar link" : "Disable link"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-primary !py-2 text-xs" disabled={shareBusy} onClick={() => void createPublicShare()}>
+                  <Share2 size={13} />{shareBusy
+                    ? (language === "pt" ? "A preparar…" : "Preparing…")
+                    : (language === "pt" ? "Criar link público" : "Create public link")}
+                </button>
+                <span className="muted text-[10px]">{language === "pt" ? "O link pode ser desativado a qualquer momento." : "The link can be disabled at any time."}</span>
+              </div>
+            )}
+          </section>}
+                </div>
+              )}
+
+              <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#263646] pt-3">
+                <div className="flex items-center gap-2 text-[10px] text-[#8fa1b3]"><CircleHelp size={13} />{t.setupHint}</div>
+                <span className="text-[10px] text-[#6d8194]">SportAnalist · v0.1.0</span>
+              </footer>
+            </>
+          )}
+
+          {workspaceSection === "settings" && (
+            <section className="mx-auto grid w-full max-w-5xl gap-4 py-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[.18em] text-[#6ce6a0]">SportAnalist</p>
+                <h2 className="mt-2 text-2xl font-bold">{language === "pt" ? "Configurações" : "Settings"}</h2>
+                <p className="muted mt-1 text-xs">{language === "pt" ? "Acesso, utilizadores e configuração dos eventos." : "Access, users and event configuration."}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { id: "account", label: language === "pt" ? "Conta e acesso" : "Account" },
+                  { id: "events", label: language === "pt" ? "Eventos" : "Events" },
+                  { id: "members", label: language === "pt" ? "Utilizadores" : "Members" },
+                ] as const).map((tab) => (
+                  <button type="button" key={tab.id} onClick={() => setSettingsTab(tab.id)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${settingsTab === tab.id ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3]"}`}>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {settingsTab === "account" && (
+                <section className="panel grid gap-3 p-4">
+                  {supabase ? (
+                    <>
+                      {!projectId && <CloudSetup supabase={supabase} onWorkspaceReady={handleWorkspaceReady} onSignOut={handleSignOut} hideAuthenticatedBar />}
+                      {projectId && cloudUserId && (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">{language === "pt" ? "Sessão iniciada" : "Signed in"}</p>
+                            <p className="muted mt-1 text-xs">{t[role]} · {team}</p>
+                          </div>
+                          <button type="button" className="btn text-xs text-rose-300" onClick={() => void signOutFromSidebar()}><LogOut size={14} />Sair</button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold">{language === "pt" ? "Modo demonstração" : "Demo mode"}</p>
+                      <label className="block text-xs text-[#b8c7d3]">{t.role}
+                        <select className="field mt-1.5" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+                          <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {settingsTab === "events" && (
+                <section className="panel grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <div className="sm:col-span-3">
+                    <h3 className="text-sm font-semibold">{t.configure}</h3>
+                    <p className="muted mt-1 text-xs">{t.configHint}</p>
+                  </div>
+                  {canConfigure ? (
+                    <>
+                      <label className="text-xs text-[#b8c7d3]">{t.newEvent}<input className="field mt-1.5" value={newNamePt} onChange={(e) => setNewNamePt(e.target.value)} placeholder="Ex.: Remate" /></label>
+                      <label className="text-xs text-[#b8c7d3]">{t.newEventEn}<input className="field mt-1.5" value={newNameEn} onChange={(e) => setNewNameEn(e.target.value)} placeholder="e.g. Shot" /></label>
+                      <button className="btn btn-primary h-10 text-xs" onClick={() => void createEventType()}><FilePlus2 size={14} />{t.create}</button>
+                    </>
+                  ) : <p className="sm:col-span-3 text-xs text-amber-300">{language === "pt" ? "Não tens permissões para configurar eventos." : "You do not have permission to configure events."}</p>}
+                </section>
+              )}
+
+              {settingsTab === "members" && (
+                <section className="panel grid gap-3 p-4">
+                  <h3 className="text-sm font-semibold">{t.members}</h3>
+                  {supabase && projectId && role === "admin" ? (
+                    <>
+                      <label className="block text-xs text-[#b8c7d3]">{t.memberEmail}
+                        <input type="email" className="field mt-1.5" value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} placeholder="analista@clube.pt" />
+                      </label>
+                      <label className="block text-xs text-[#b8c7d3]">{t.memberRole}
+                        <select className="field mt-1.5" value={memberRole} onChange={(e) => setMemberRole(e.target.value as AppRole)}>
+                          <option value="admin">{t.admin}</option><option value="analyst">{t.analyst}</option><option value="configurator">{t.configurator}</option><option value="viewer">{t.viewer}</option>
+                        </select>
+                      </label>
+                      <button className="btn btn-primary w-fit text-xs" disabled={!memberEmail.trim()} onClick={() => void addProjectMember()}><Plus size={14} />{t.addMember}</button>
+                      <p className="muted text-xs">{t.memberHint}</p>
+                    </>
+                  ) : <p className="text-xs text-amber-300">{language === "pt" ? "Apenas o administrador do projeto pode gerir utilizadores." : "Only the project administrator can manage users."}</p>}
+                </section>
+              )}
+            </section>
+          )}
         </section>
       </div>
       {message && <div role="status" className="fixed bottom-4 right-4 z-[60] max-w-sm rounded-xl border border-[#365846] bg-[#12241b] px-3 py-2.5 text-xs text-[#a5f1c1] shadow-xl">{message}<button className="ml-2 text-[#a5f1c1]" onClick={() => setMessage("")}><X size={13} /></button></div>}
