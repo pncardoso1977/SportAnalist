@@ -1411,10 +1411,11 @@ export default function HomePage() {
                                   </div>}
                                 </section>}
                   </div>
+                  {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
                 </div>
               )}
 
-              alysisTab === "report" && (
+              {analysisTab === "report" && (
                 <div className="grid gap-4">
                   {hasActiveMatch && importedLiveLoading && (
             <section className="panel p-3 text-xs text-[#a8b8c7]">{language === "pt" ? "A carregar tempos do jogo ao vivo…" : "Loading live-match player times…"}</section>
