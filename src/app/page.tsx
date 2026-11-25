@@ -245,6 +245,11 @@ export default function HomePage() {
     if (teamName) setTeam(teamName);
   }, []);
   const handleSignOut = useCallback(() => {
+    if (summaryTimerRef.current) window.clearInterval(summaryTimerRef.current);
+    if (summaryTransitionTimerRef.current) window.clearTimeout(summaryTransitionTimerRef.current);
+    summaryTimerRef.current = null; summaryTransitionTimerRef.current = null; summaryIndexRef.current = -1;
+    pendingAutoplayRef.current = false;
+    playerRef.current?.pauseVideo();
     shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
     setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
@@ -1087,6 +1092,9 @@ export default function HomePage() {
     setSummaryTransition(false);
     setSummaryNextLabel("");
 
+    const clipSourceUrl = matchVideos.find((video) => parseYouTubeId(video.youtube_url) === clip.videoId)?.youtube_url
+      ?? `https://www.youtube.com/watch?v=${clip.videoId}`;
+    setLoadedUrl(clipSourceUrl);
     if (playerRef.current && playerVideoIdRef.current === clip.videoId) {
       playerRef.current.seekTo(clip.startSecond, true);
       playerRef.current.playVideo();
@@ -1572,18 +1580,18 @@ export default function HomePage() {
                   <aside className="panel grid min-w-0 content-start gap-3 p-3">
                     <div><h3 className="text-sm font-semibold">{language === "pt" ? "Escolher jogadas" : "Choose plays"}</h3><p className="muted mt-1 text-[10px]">{language === "pt" ? "Marca os eventos que devem entrar no resumo. A sequência é ordenada pelo vídeo e pelo tempo." : "Select the events to include. The sequence is ordered by video and timestamp."}</p></div>
                     <label className="block text-[10px] font-semibold text-[#b8c7d3]">{language === "pt" ? "Duração de cada jogada" : "Duration per play"}
-                      <select className="field mt-1.5 !py-2 text-xs" value={summaryClipDuration} onChange={(event) => setSummaryClipDuration(Number(event.target.value))}>
+                      <select className="field mt-1.5 !py-2 text-xs" value={summaryClipDuration} disabled={summaryPlaying} onChange={(event) => setSummaryClipDuration(Number(event.target.value))}>
                         <option value={10}>10 {language === "pt" ? "segundos" : "seconds"}</option><option value={15}>15 {language === "pt" ? "segundos" : "seconds"}</option><option value={20}>20 {language === "pt" ? "segundos" : "seconds"}</option><option value={30}>30 {language === "pt" ? "segundos" : "seconds"}</option>
                       </select>
                     </label>
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] pb-2"><span className="text-[10px] font-semibold text-[#b8c7d3]">{summarySelectedIds.length} / {summaryCandidates.length} {language === "pt" ? "selecionadas" : "selected"}</span><div className="flex gap-2"><button type="button" className="text-[10px] text-[#83e6a9] hover:underline" onClick={() => setSummarySelectedIds(summaryCandidates.map((record) => record.id))}>{language === "pt" ? "Todas" : "All"}</button><button type="button" className="text-[10px] text-[#b8c7d3] hover:underline" onClick={() => setSummarySelectedIds([])}>{language === "pt" ? "Limpar" : "Clear"}</button></div></div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] pb-2"><span className="text-[10px] font-semibold text-[#b8c7d3]">{summarySelectedIds.length} / {summaryCandidates.length} {language === "pt" ? "selecionadas" : "selected"}</span><div className="flex gap-2"><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#83e6a9] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds(summaryCandidates.map((record) => record.id))}>{language === "pt" ? "Todas" : "All"}</button><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#b8c7d3] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds([])}>{language === "pt" ? "Limpar" : "Clear"}</button></div></div>
                     {summaryCandidates.length === 0 ? <p className="muted rounded-lg border border-dashed border-[#31475a] px-3 py-5 text-center text-xs">{language === "pt" ? "Ainda não existem eventos registados neste jogo." : "There are no recorded events for this match yet."}</p> : <div className="grid max-h-[36svh] gap-1 overflow-y-auto pr-1">
                       {summaryCandidates.map((record) => {
                         const selected = summarySelectedIds.includes(record.id);
                         const sourceId = parseYouTubeId(record.youtube_url);
                         const sourceIndex = matchVideos.findIndex((video) => parseYouTubeId(video.youtube_url) === sourceId);
                         return <label key={record.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2 transition ${selected ? "border-[#35d07f70] bg-[#35d07f10]" : "border-[#263646] bg-[#0b131c] hover:border-[#526b80]"}`}>
-                          <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={selected} onChange={(event) => setSummarySelectedIds((current) => event.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
+                          <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={selected} disabled={summaryPlaying} onChange={(event) => setSummarySelectedIds((current) => event.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
                           <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-semibold">{language === "pt" ? record.event_name_pt : record.event_name_en}</span><span className="shrink-0 font-mono text-[10px] text-[#83e6a9]">{formatTime(record.video_second)}</span></span><span className="muted mt-0.5 block text-[9px]">{sourceIndex >= 0 ? `${language === "pt" ? "Vídeo" : "Video"} ${sourceIndex + 1}` : (language === "pt" ? "Vídeo associado" : "Associated video")} · {record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</span>{record.outcome && <span className="muted mt-0.5 block truncate text-[9px]">{record.outcome}</span>}</span>
                         </label>;
                       })}
