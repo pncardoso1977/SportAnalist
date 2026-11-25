@@ -1832,14 +1832,24 @@ export default function HomePage() {
                         <div className="grid gap-2 border-t border-[#263646] pt-2">
                           <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{playerRoleFilter === "goalkeeper" ? (language === "pt" ? "Momentos do guarda-redes" : "Goalkeeper actions") : (language === "pt" ? "Momentos do jogador de campo" : "Outfield actions")}</h4><span className="muted text-[9px]">{language === "pt" ? "Registo: vídeo −10 s" : "Capture: video −10 sec"}</span></div>
                           {!selectedAnalysisPlayers.length && <p className="text-[10px] text-amber-200">{language === "pt" ? "Seleciona pelo menos um jogador para ativar os momentos." : "Select at least one player to enable the actions."}</p>}
-                          {PLAYER_ANALYSIS_ACTIONS[playerRoleFilter].map((action) => (
-                            <div key={action.key} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border border-[#263646] bg-[#0b131c] px-2 py-1.5">
-                              <span className="w-full text-[10px] font-semibold text-[#d0dbe4]">{language === "pt" ? action.pt : action.en}</span>
-                              {action.details ? action.details.map((detail) => <button key={detail.key} type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} onClick={() => void registerPlayerAnalysisAction(action.key, detail.key)} className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[9px] font-medium text-[#8cebb2] hover:bg-[#173a29] disabled:cursor-not-allowed disabled:opacity-35">{language === "pt" ? detail.pt : detail.en}</button>) : <button type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} onClick={() => void registerPlayerAnalysisAction(action.key)} className="rounded-md border border-[#315b47] bg-[#10251a] px-2 py-1 text-[9px] font-medium text-[#8cebb2] hover:bg-[#173a29] disabled:cursor-not-allowed disabled:opacity-35"><Plus size={10} className="mr-1 inline" />{language === "pt" ? "Registar" : "Record"}</button>}
+                          <div className="event-single-list overflow-hidden rounded-lg border border-[#263646] bg-[#0b131c]">
+                            <div className="event-grid grid grid-cols-[minmax(0,1fr)_28px] items-center gap-x-1 gap-y-0.5 px-2 py-1.5">
+                              <div className="text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{t.momentColumn}</div>
+                              <div className="text-center text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">+</div>
+                              {PLAYER_ANALYSIS_ACTIONS[playerRoleFilter].flatMap((action) => action.details?.length ? action.details.map((detail) => ({ action, detail })) : [{ action, detail: null }]).map(({ action, detail }) => {
+                                const momentLabel = (language === "pt" ? action.pt : action.en) + (detail ? " (" + (language === "pt" ? detail.pt : detail.en) + ")" : "");
+                                return <div key={action.key + "-" + (detail?.key ?? "default")} className="contents">
+                                  <div className="truncate py-1.5 pr-1 text-[10px] font-medium text-[#d0dbe4]" title={momentLabel}>{momentLabel}</div>
+                                  <div className="flex items-center justify-center">
+                                    <button type="button" disabled={!canRecord || selectedAnalysisPlayers.length === 0} title={(language === "pt" ? "Registar" : "Record") + " · " + momentLabel} aria-label={(language === "pt" ? "Registar" : "Record") + " · " + momentLabel} onClick={() => void registerPlayerAnalysisAction(action.key, detail?.key ?? null)} className="event-shortcut event-shortcut-attack flex h-5 w-5 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35">
+                                      <Plus size={10} />
+                                    </button>
+                                  </div>
+                                </div>;
+                              })}
                             </div>
-                          ))}
-                        </div>
-                        <section className="grid gap-1.5 border-t border-[#263646] pt-2">
+                          </div>
+                        </div>                        <section className="grid gap-1.5 border-t border-[#263646] pt-2">
                           <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Registos individuais" : "Individual records"}</h4><span className="rounded-full bg-[#35d07f18] px-1.5 py-0.5 text-[9px] text-[#83e6a9]">{playerAnalysisEvents.length}</span></div>
                           {playerAnalysisFeed.length === 0 ? <p className="muted px-1 py-2 text-[10px]">{language === "pt" ? "Ainda não existem ações individuais registadas." : "No individual actions recorded yet."}</p> : <div className="grid max-h-[180px] gap-1 overflow-y-auto pr-1">
                             {playerAnalysisFeed.slice(0, 30).map((record) => {
