@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity, ArrowDownToLine, ArrowLeft, CircleHelp, Clock3, Copy, FilePlus2,
-  FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
+  Film, FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type MatchVideo, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
@@ -22,10 +22,14 @@ type ImportedLiveMatchData = {
   players: ImportedLivePlayer[];
   stints: PlayerStint[];
 };
+type SummaryClip = { record: MatchEvent; videoId: string; startSecond: number; endSecond: number };
 type YouTubePlayer = {
   getCurrentTime: () => number;
+  getPlayerState: () => number;
   destroy: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  playVideo: () => void;
+  pauseVideo: () => void;
 };
 type YouTubePlayerApi = {
   Player: new (elementId: string, options: {
@@ -202,10 +206,22 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [workspaceSection, setWorkspaceSection] = useState<"post-match" | "settings">("post-match");
   const [postMatchPage, setPostMatchPage] = useState<"home" | "new" | "saved" | "analysis">("home");
-  const [analysisTab, setAnalysisTab] = useState<"video" | "report">("video");
+  const [analysisTab, setAnalysisTab] = useState<"video" | "summary" | "report">("video");
+  const [summarySelectedIds, setSummarySelectedIds] = useState<string[]>([]);
+  const [summaryClipDuration, setSummaryClipDuration] = useState(20);
+  const [summaryCurrentIndex, setSummaryCurrentIndex] = useState(-1);
+  const [summaryPlaying, setSummaryPlaying] = useState(false);
+  const [summaryTransition, setSummaryTransition] = useState(false);
+  const [summaryNextLabel, setSummaryNextLabel] = useState("");
   const [settingsTab, setSettingsTab] = useState<"account" | "events" | "members">("account");
   const playerRef = useRef<YouTubePlayer | null>(null);
+  const playerVideoIdRef = useRef("");
   const pendingSeekRef = useRef<number | null>(null);
+  const pendingAutoplayRef = useRef(false);
+  const summaryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const summaryTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const summarySequenceRef = useRef<SummaryClip[]>([]);
+  const summaryIndexRef = useRef(-1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
   const t = COPY[language];
@@ -234,6 +250,7 @@ export default function HomePage() {
     setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
     setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
+    setSummarySelectedIds([]); setSummaryCurrentIndex(-1); setSummaryPlaying(false); setSummaryTransition(false);
   }, []);
   const activeEvents = events.filter((event) => event.active);
   const eventRows = activeEvents.filter((event) => !event.is_counter);
@@ -346,7 +363,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!videoId || analysisTab !== "video") return;
+    if (!videoId || analysisTab === "report") return;
     const win = window as PlayerWindow;
     const initialize = () => {
       if (!win.YT?.Player) return;
@@ -356,9 +373,14 @@ export default function HomePage() {
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
         events: {
           onReady: () => {
+            playerVideoIdRef.current = videoId;
             if (pendingSeekRef.current !== null) {
               playerRef.current?.seekTo(pendingSeekRef.current, true);
               pendingSeekRef.current = null;
+            }
+            if (pendingAutoplayRef.current) {
+              playerRef.current?.playVideo();
+              pendingAutoplayRef.current = false;
             }
             setMessage(t.loaded);
           },
@@ -381,6 +403,7 @@ export default function HomePage() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (playerRef.current?.destroy) playerRef.current.destroy();
       playerRef.current = null;
+      playerVideoIdRef.current = "";
     };
   }, [videoId, analysisTab, refreshClock, t.loaded, t.videoUnavailable]);
 
@@ -393,6 +416,28 @@ export default function HomePage() {
     const timeDifference = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     return timeDifference || records.indexOf(b) - records.indexOf(a);
   }), [records]);
+  const summaryCandidates = useMemo(() => {
+    const videoOrder = (record: MatchEvent) => {
+      const id = parseYouTubeId(record.youtube_url);
+      const index = matchVideos.findIndex((video) => parseYouTubeId(video.youtube_url) === id);
+      return index < 0 ? matchVideos.length : index;
+    };
+    return records.slice().sort((a, b) =>
+      videoOrder(a) - videoOrder(b)
+      || a.video_second - b.video_second
+      || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [records, matchVideos]);
+  const summaryClips = useMemo(() => summaryCandidates
+    .filter((record) => summarySelectedIds.includes(record.id))
+    .map((record): SummaryClip | null => {
+      const sourceVideoId = parseYouTubeId(record.youtube_url) ?? parseYouTubeId(loadedUrl);
+      if (!sourceVideoId) return null;
+      const startSecond = Math.max(0, Math.floor(record.video_second));
+      return { record, videoId: sourceVideoId, startSecond, endSecond: startSecond + summaryClipDuration };
+    })
+    .filter((clip): clip is SummaryClip => clip !== null),
+    [summaryCandidates, summarySelectedIds, loadedUrl, summaryClipDuration]);
   const goalScores = useMemo(() => calculateGoalScores(records), [records]);
 
   async function registerEvent(
@@ -634,6 +679,8 @@ export default function HomePage() {
   }
 
   function selectMatchVideo(url: string) {
+    stopSummaryPlayback();
+    pendingAutoplayRef.current = false;
     const id = parseYouTubeId(url);
     if (!id) {
       setMessage(t.linkBad);
@@ -651,6 +698,8 @@ export default function HomePage() {
   }
 
   async function loadVideo() {
+    stopSummaryPlayback();
+    setSummarySelectedIds([]);
     setAiCandidates([]);
     setAiConsent(false);
     setAiError("");
@@ -779,6 +828,8 @@ export default function HomePage() {
   }
 
   async function openSavedMatch(match: Match) {
+    stopSummaryPlayback();
+    setSummarySelectedIds([]);
     setAiCandidates([]);
     setAiConsent(false);
     setAiError("");
@@ -843,6 +894,8 @@ export default function HomePage() {
   }
 
   function startNewMatch() {
+    stopSummaryPlayback();
+    setSummarySelectedIds([]);
     shareRequestRef.current += 1;
     setCloudMatchId(null);
     pendingSeekRef.current = null;
@@ -1001,6 +1054,86 @@ export default function HomePage() {
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
+  function clearSummaryTimers() {
+    if (summaryTimerRef.current) window.clearInterval(summaryTimerRef.current);
+    if (summaryTransitionTimerRef.current) window.clearTimeout(summaryTransitionTimerRef.current);
+    summaryTimerRef.current = null;
+    summaryTransitionTimerRef.current = null;
+  }
+
+  function stopSummaryPlayback() {
+    clearSummaryTimers();
+    summaryIndexRef.current = -1;
+    setSummaryCurrentIndex(-1);
+    setSummaryPlaying(false);
+    setSummaryTransition(false);
+    setSummaryNextLabel("");
+    playerRef.current?.pauseVideo();
+  }
+
+  function playSummaryClip(index: number) {
+    const clip = summarySequenceRef.current[index];
+    if (!clip) {
+      stopSummaryPlayback();
+      return;
+    }
+    if (summaryTimerRef.current) window.clearInterval(summaryTimerRef.current);
+    if (summaryTransitionTimerRef.current) window.clearTimeout(summaryTransitionTimerRef.current);
+    summaryTimerRef.current = null;
+    summaryTransitionTimerRef.current = null;
+    summaryIndexRef.current = index;
+    setSummaryCurrentIndex(index);
+    setSummaryTransition(false);
+    setSummaryNextLabel("");
+
+    if (playerRef.current && playerVideoIdRef.current === clip.videoId) {
+      playerRef.current.seekTo(clip.startSecond, true);
+      playerRef.current.playVideo();
+    } else {
+      pendingSeekRef.current = clip.startSecond;
+      pendingAutoplayRef.current = true;
+      setVideoId(clip.videoId);
+    }
+    setSummaryPlaying(true);
+
+    summaryTimerRef.current = window.setInterval(() => {
+      if (summaryIndexRef.current !== index) return;
+      const current = playerRef.current?.getCurrentTime();
+      const playerState = playerRef.current?.getPlayerState();
+      if ((typeof current === "number" && current >= clip.endSecond) || playerState === 0) {
+        if (summaryTimerRef.current) window.clearInterval(summaryTimerRef.current);
+        summaryTimerRef.current = null;
+        const nextClip = summarySequenceRef.current[index + 1];
+        if (nextClip) {
+          playerRef.current?.pauseVideo();
+          setSummaryTransition(true);
+          setSummaryNextLabel(language === "pt" ? nextClip.record.event_name_pt : nextClip.record.event_name_en);
+          summaryTransitionTimerRef.current = window.setTimeout(() => playSummaryClip(index + 1), 1300);
+        } else {
+          summaryIndexRef.current = -1;
+          setSummaryPlaying(false);
+          setSummaryCurrentIndex(-1);
+          setMessage(language === "pt" ? "Resumo concluído." : "Summary completed.");
+        }
+      }
+    }, 250);
+  }
+
+  function startSummaryPlayback() {
+    if (!summaryClips.length) {
+      setMessage(language === "pt" ? "Seleciona pelo menos uma jogada para o resumo." : "Select at least one play for the summary.");
+      return;
+    }
+    clearSummaryTimers();
+    summarySequenceRef.current = summaryClips;
+    playSummaryClip(0);
+  }
+
+  useEffect(() => () => {
+    if (summaryTimerRef.current) window.clearInterval(summaryTimerRef.current);
+    if (summaryTransitionTimerRef.current) window.clearTimeout(summaryTransitionTimerRef.current);
+  }, []);
 
   const totalAttacks = records.filter((record) => record.moment === "attack").length;
   const totalCounters = records.filter((record) => record.moment === "defense").length;
@@ -1233,10 +1366,11 @@ export default function HomePage() {
                 <div className="flex flex-wrap gap-2 border-t border-[#263646] pt-3">
                   {([
                     { id: "video", label: language === "pt" ? "Vídeo e eventos" : "Video & events", icon: Video },
+                    { id: "summary", label: language === "pt" ? "Resumo" : "Summary", icon: Film },
                     { id: "report", label: language === "pt" ? "Relatório" : "Report", icon: Activity },
                   ] as const).map((tab) => {
                     const Icon = tab.icon;
-                    return <button key={tab.id} type="button" onClick={() => setAnalysisTab(tab.id)}
+                    return <button key={tab.id} type="button" onClick={() => { if (analysisTab === "summary" && tab.id !== "summary") stopSummaryPlayback(); setAnalysisTab(tab.id); }}
                       className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${analysisTab === tab.id ? "border-[#35d07f80] bg-[#35d07f18] text-[#8cebb2]" : "border-[#31475a] text-[#b8c7d3] hover:border-[#5f819e]"}`}>
                       <Icon size={14} />{tab.label}
                     </button>;
@@ -1412,6 +1546,56 @@ export default function HomePage() {
                                 </section>}
                   </div>
                   {hasActiveMatch && Boolean(loadedUrl) && <p className="mobile-view-only muted text-xs">{t.mobileViewOnly}</p>}
+                </div>
+              )}
+
+              {analysisTab === "summary" && (
+                <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <section className="panel min-w-0 overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] px-3 py-2.5">
+                      <div><h2 className="text-sm font-semibold">{language === "pt" ? "Resumo do jogo" : "Match summary"}</h2><p className="muted mt-0.5 text-[10px]">{language === "pt" ? "Reprodução sequencial das jogadas selecionadas" : "Sequential playback of selected plays"}</p></div>
+                      <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-xs text-[#75eca8]">{summaryCurrentIndex >= 0 ? `${summaryCurrentIndex + 1}/${summaryClips.length}` : `${summaryClips.length} ${language === "pt" ? "jogadas" : "plays"}`}</span>
+                    </div>
+                    <div className="video-stage relative w-full overflow-hidden bg-black">
+                      {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-[#8798a8]"><Video size={34} strokeWidth={1.2} /><p className="text-sm">{t.noVideo}</p></div>}
+                      {summaryTransition && <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#080d13]/95 px-6 text-center"><p className="text-[10px] font-semibold uppercase tracking-[.22em] text-[#6ce6a0]">SPORTANALIST · {language === "pt" ? "RESUMO DO JOGO" : "MATCH SUMMARY"}</p><h3 className="mt-4 text-2xl font-bold tracking-[.12em] text-white">{language === "pt" ? "PRÓXIMA JOGADA" : "NEXT PLAY"}</h3><p className="mt-2 text-sm text-[#c3d0dc]">{summaryNextLabel}</p><div className="mt-5 h-1 w-24 overflow-hidden rounded-full bg-[#294435]"><div className="h-full w-full bg-[#35d07f]" /></div></div>}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#263646] px-3 py-3">
+                      <p className="muted text-[10px]">{summaryPlaying ? (language === "pt" ? "A reproduzir o resumo automaticamente." : "Summary is playing automatically.") : (language === "pt" ? "Cada jogada começa no timestamp registado e termina após a duração escolhida." : "Each play starts at its recorded timestamp and ends after the selected duration.")}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-primary !py-2 text-xs" disabled={!summaryClips.length || !videoId} onClick={startSummaryPlayback}><Play size={13} />{summaryPlaying ? (language === "pt" ? "Reiniciar resumo" : "Restart summary") : (language === "pt" ? "Reproduzir resumo" : "Play summary")}</button>
+                        <button type="button" className="btn !py-2 text-xs" disabled={!summaryPlaying && summaryCurrentIndex < 0} onClick={stopSummaryPlayback}>{language === "pt" ? "Parar" : "Stop"}</button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <aside className="panel grid min-w-0 content-start gap-3 p-3">
+                    <div><h3 className="text-sm font-semibold">{language === "pt" ? "Escolher jogadas" : "Choose plays"}</h3><p className="muted mt-1 text-[10px]">{language === "pt" ? "Marca os eventos que devem entrar no resumo. A sequência é ordenada pelo vídeo e pelo tempo." : "Select the events to include. The sequence is ordered by video and timestamp."}</p></div>
+                    <label className="block text-[10px] font-semibold text-[#b8c7d3]">{language === "pt" ? "Duração de cada jogada" : "Duration per play"}
+                      <select className="field mt-1.5 !py-2 text-xs" value={summaryClipDuration} onChange={(event) => setSummaryClipDuration(Number(event.target.value))}>
+                        <option value={10}>10 {language === "pt" ? "segundos" : "seconds"}</option><option value={15}>15 {language === "pt" ? "segundos" : "seconds"}</option><option value={20}>20 {language === "pt" ? "segundos" : "seconds"}</option><option value={30}>30 {language === "pt" ? "segundos" : "seconds"}</option>
+                      </select>
+                    </label>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] pb-2"><span className="text-[10px] font-semibold text-[#b8c7d3]">{summarySelectedIds.length} / {summaryCandidates.length} {language === "pt" ? "selecionadas" : "selected"}</span><div className="flex gap-2"><button type="button" className="text-[10px] text-[#83e6a9] hover:underline" onClick={() => setSummarySelectedIds(summaryCandidates.map((record) => record.id))}>{language === "pt" ? "Todas" : "All"}</button><button type="button" className="text-[10px] text-[#b8c7d3] hover:underline" onClick={() => setSummarySelectedIds([])}>{language === "pt" ? "Limpar" : "Clear"}</button></div></div>
+                    {summaryCandidates.length === 0 ? <p className="muted rounded-lg border border-dashed border-[#31475a] px-3 py-5 text-center text-xs">{language === "pt" ? "Ainda não existem eventos registados neste jogo." : "There are no recorded events for this match yet."}</p> : <div className="grid max-h-[36svh] gap-1 overflow-y-auto pr-1">
+                      {summaryCandidates.map((record) => {
+                        const selected = summarySelectedIds.includes(record.id);
+                        const sourceId = parseYouTubeId(record.youtube_url);
+                        const sourceIndex = matchVideos.findIndex((video) => parseYouTubeId(video.youtube_url) === sourceId);
+                        return <label key={record.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2 transition ${selected ? "border-[#35d07f70] bg-[#35d07f10]" : "border-[#263646] bg-[#0b131c] hover:border-[#526b80]"}`}>
+                          <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={selected} onChange={(event) => setSummarySelectedIds((current) => event.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
+                          <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-semibold">{language === "pt" ? record.event_name_pt : record.event_name_en}</span><span className="shrink-0 font-mono text-[10px] text-[#83e6a9]">{formatTime(record.video_second)}</span></span><span className="muted mt-0.5 block text-[9px]">{sourceIndex >= 0 ? `${language === "pt" ? "Vídeo" : "Video"} ${sourceIndex + 1}` : (language === "pt" ? "Vídeo associado" : "Associated video")} · {record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</span>{record.outcome && <span className="muted mt-0.5 block truncate text-[9px]">{record.outcome}</span>}</span>
+                        </label>;
+                      })}
+                    </div>}
+                    <div className="border-t border-[#263646] pt-3"><div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold">{language === "pt" ? "Sequência do resumo" : "Summary sequence"}</h3><span className="rounded-full bg-[#35d07f18] px-2 py-0.5 text-[9px] text-[#83e6a9]">{summaryClips.length}</span></div>
+                      {summaryClips.length === 0 ? <p className="muted mt-2 text-[10px]">{language === "pt" ? "Seleciona as jogadas acima para construir a sequência." : "Select plays above to build the sequence."}</p> : <div className="mt-2 grid gap-1.5">{summaryClips.map((clip, index) => {
+                        const sourceIndex = matchVideos.findIndex((video) => parseYouTubeId(video.youtube_url) === clip.videoId);
+                        return <div key={clip.record.id}><div className={`flex items-center gap-2 rounded-md border px-2 py-2 ${summaryCurrentIndex === index ? "border-[#35d07f80] bg-[#35d07f12]" : "border-[#263646] bg-[#0b131c]"}`}><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#1e4933] text-[9px] font-bold text-[#8cebb2]">{index + 1}</span><span className="min-w-0 flex-1 truncate text-[10px] font-medium">{language === "pt" ? clip.record.event_name_pt : clip.record.event_name_en}</span><span className="shrink-0 font-mono text-[9px] text-[#83e6a9]">{formatTime(clip.startSecond)}</span><span className="shrink-0 text-[9px] text-[#91a4b5]">{sourceIndex >= 0 ? `V${sourceIndex + 1}` : "YT"}</span></div>{index < summaryClips.length - 1 && <div className="flex items-center justify-center gap-2 py-1 text-[8px] font-semibold uppercase tracking-[.18em] text-[#7a8d9e]"><span className="h-px flex-1 bg-[#31475a]" />{language === "pt" ? "Separador" : "Transition"}<span className="h-px flex-1 bg-[#31475a]" /></div>}</div>;
+                      })}</div>}
+                    </div>
+                    <p className="muted text-[9px] leading-relaxed">{language === "pt" ? "O resumo é reproduzido dentro da aplicação através do YouTube. Os separadores são visuais; não é criado nem exportado um ficheiro de vídeo único." : "The summary plays inside the app using YouTube. Transitions are visual; no single video file is rendered or exported."}</p>
+                  </aside>
                 </div>
               )}
 
