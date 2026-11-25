@@ -230,6 +230,9 @@ export default function HomePage() {
   const [newAnalysisPlayerNumber, setNewAnalysisPlayerNumber] = useState("");
   const [newAnalysisPlayerRole, setNewAnalysisPlayerRole] = useState<PlayerAnalysisRole>("field");
   const [selectedAnalysisPlayerIds, setSelectedAnalysisPlayerIds] = useState<string[]>([]);
+  const [playerSharePlayerId, setPlayerSharePlayerId] = useState<string | null>(null);
+  const [playerShareUrl, setPlayerShareUrl] = useState("");
+  const [playerShareBusy, setPlayerShareBusy] = useState(false);
   const [outcomeText, setOutcomeText] = useState("");
   const [newNamePt, setNewNamePt] = useState("");
   const [newNameEn, setNewNameEn] = useState("");
@@ -280,6 +283,7 @@ export default function HomePage() {
   const summarySequenceRef = useRef<SummaryClip[]>([]);
   const summaryIndexRef = useRef(-1);
   const summaryShareRequestRef = useRef(0);
+  const playerShareRequestRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
   const t = COPY[language];
@@ -291,6 +295,7 @@ export default function HomePage() {
   const canRecord = hasActiveMatch && Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && loadedUrl && (role === "admin" || role === "analyst"));
   const canCreateSummaryShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst"));
+  const canManagePlayerAnalysisShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst"));
   const selectedSavedMatch = matches.find((match) => match.id === cloudMatchId) ?? null;
   const isAddingVideosToExistingMatch = Boolean(selectedSavedMatch);
   const competitionOptions = useMemo(() => Array.from(new Set(
@@ -311,7 +316,7 @@ export default function HomePage() {
     playerRef.current?.pauseVideo();
     shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
     setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
@@ -801,6 +806,75 @@ export default function HomePage() {
     setSelectedAnalysisPlayerIds((current) => current.filter((id) => id !== player.id));
   }
 
+
+  async function openPlayerAnalysisShare(player: MatchAnalysisPlayer) {
+    if (!canManagePlayerAnalysisShare || !supabase) {
+      setMessage(language === "pt" ? "A partilha pública exige uma ligação Supabase e perfil de analista ou administrador." : "Public sharing requires Supabase and an analyst or administrator role.");
+      return;
+    }
+    if (!playerAnalysisEvents.some((event) => event.player_id === player.id)) {
+      setMessage(language === "pt" ? "Regista pelo menos um momento deste jogador antes de criar o link." : "Record at least one event for this player before creating the link.");
+      return;
+    }
+
+    const requestId = ++playerShareRequestRef.current;
+    setPlayerSharePlayerId(player.id);
+    setPlayerShareBusy(true);
+    const { data: existingToken, error: tokenError } = await supabase.rpc("get_player_analysis_share_token", { target_player: player.id });
+    if (requestId !== playerShareRequestRef.current) return;
+    if (tokenError) {
+      setMessage(language === "pt"
+        ? "Não foi possível consultar a partilha. Confirma que a migração SQL 0028 está aplicada. " + tokenError.message
+        : "Could not load the share link. Confirm SQL migration 0028 is applied. " + tokenError.message);
+      setPlayerShareBusy(false);
+      return;
+    }
+
+    let token = typeof existingToken === "string" ? existingToken : null;
+    if (!token) {
+      const { data, error } = await supabase.rpc("create_player_analysis_share", { target_player: player.id });
+      if (requestId !== playerShareRequestRef.current) return;
+      if (error || typeof data !== "string") {
+        setMessage(error?.message ?? (language === "pt" ? "Não foi possível criar o link público do jogador." : "Could not create the player's public link."));
+        setPlayerShareBusy(false);
+        return;
+      }
+      token = data;
+    }
+
+    setPlayerShareUrl(window.location.origin + "/jogador/" + token);
+    setPlayerShareBusy(false);
+    setMessage(language === "pt" ? "Link público dos eventos do jogador disponível." : "The player's public events link is ready.");
+  }
+
+  async function revokePlayerAnalysisShare() {
+    const playerId = playerSharePlayerId;
+    if (!playerId || !supabase || !canManagePlayerAnalysisShare) return;
+    const requestId = ++playerShareRequestRef.current;
+    setPlayerShareBusy(true);
+    const { error } = await supabase.rpc("revoke_player_analysis_share", { target_player: playerId });
+    if (requestId !== playerShareRequestRef.current) return;
+    if (error) {
+      setMessage(error.message);
+      setPlayerShareBusy(false);
+      return;
+    }
+    setPlayerSharePlayerId(null);
+    setPlayerShareUrl("");
+    setPlayerShareBusy(false);
+    setMessage(language === "pt" ? "Link público do jogador desativado." : "Player public link revoked.");
+  }
+
+  async function copyPlayerAnalysisShareLink() {
+    if (!playerShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(playerShareUrl);
+      setMessage(language === "pt" ? "Link público do jogador copiado." : "Player public link copied.");
+    } catch {
+      setMessage(language === "pt" ? "Copia o endereço apresentado no campo do link." : "Copy the address shown in the link field.");
+    }
+  }
+
   async function removeAnalysisPlayer(player: MatchAnalysisPlayer) {
     if (!canRecord) return;
     if (supabase) {
@@ -810,6 +884,7 @@ export default function HomePage() {
     setAnalysisPlayers((current) => current.filter((item) => item.id !== player.id));
     setPlayerAnalysisEvents((current) => current.filter((item) => item.player_id !== player.id));
     setSelectedAnalysisPlayerIds((current) => current.filter((id) => id !== player.id));
+    if (playerSharePlayerId === player.id) { playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false); }
   }
 
   async function registerPlayerAnalysisAction(categoryKey: string, detailKey: string | null = null) {
@@ -1027,7 +1102,7 @@ export default function HomePage() {
       setCloudMatchId(targetMatch.id);
       if (!existingMatch) {
         setRecords([]);
-        setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+        setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
       }
       setImportedLiveData(existingMatch?.source_public_live_match_id ? importedLiveData : null);
       void loadShareForMatch(targetMatch.id);
@@ -1038,7 +1113,7 @@ export default function HomePage() {
       setPublicShareToken(null);
       setPublicShareUrl("");
       setShareBusy(false);
-      setRecords([]); setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+      setRecords([]); setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
       setMatchVideos(uniqueVideoUrls.map((url, index) => ({
         id: `demo-video-${index}`, match_id: "demo-match", youtube_url: url, sort_order: index,
       })));
@@ -1055,7 +1130,7 @@ export default function HomePage() {
   async function openSavedMatch(match: Match) {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setCaptureMode("team");
     setAiCandidates([]);
     setAiConsent(false);
@@ -1124,7 +1199,7 @@ export default function HomePage() {
   function startNewMatch() {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError("");
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setCaptureMode("team");
     summaryShareRequestRef.current += 1; setSummaryShareToken(null); setSummaryShareUrl(""); setSummaryShareBusy(false);
     shareRequestRef.current += 1;
@@ -1825,10 +1900,22 @@ export default function HomePage() {
                               <select aria-label={language === "pt" ? `Função de ${player.display_name}` : `${player.display_name} role`} className="w-[93px] rounded border border-[#31475a] bg-[#101923] px-1 py-1 text-[9px] text-[#b8c7d3]" value={player.role_key} disabled={!canRecord} onChange={(event) => void updateAnalysisPlayerRole(player, event.target.value as PlayerAnalysisRole)}>
                                 <option value="goalkeeper">{language === "pt" ? "Guarda-Redes" : "Goalkeeper"}</option><option value="field">{language === "pt" ? "Campo" : "Field"}</option>
                               </select>
+                              <button type="button" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#83e6a9] hover:bg-[#35d07f18] disabled:cursor-not-allowed disabled:opacity-35" title={language === "pt" ? "Link público dos eventos deste jogador" : "Public link for this player's events"} aria-label={language === "pt" ? "Link público dos eventos deste jogador" : "Public link for this player's events"} disabled={!canManagePlayerAnalysisShare || !canRecord || playerShareBusy} onClick={() => void openPlayerAnalysisShare(player)}><Share2 size={12} /></button>
                               <button type="button" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-rose-300 hover:bg-rose-950/30" title={language === "pt" ? "Remover jogador" : "Remove player"} aria-label={language === "pt" ? "Remover jogador" : "Remove player"} disabled={!canRecord} onClick={() => void removeAnalysisPlayer(player)}><Trash2 size={12} /></button>
                             </div>
                           ))}
                         </div>
+                        {playerSharePlayerId && <div className="grid gap-2 rounded-lg border border-[#315b47] bg-[#10251a] p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-[10px] font-semibold text-[#8cebb2]">{language === "pt" ? "Link público — " : "Public link — "}{analysisPlayers.find((item) => item.id === playerSharePlayerId)?.display_name ?? ""}</span>
+                            <button type="button" className="text-[9px] text-[#b8c7d3] hover:text-white" onClick={() => { playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false); }}>{language === "pt" ? "Fechar" : "Close"}</button>
+                          </div>
+                          {playerShareBusy ? <p className="text-[10px] text-[#b8c7d3]">{language === "pt" ? "A preparar link…" : "Preparing link…"}</p> : playerShareUrl ? <div className="flex min-w-0 items-center gap-1.5">
+                            <input readOnly value={playerShareUrl} className="field min-w-0 flex-1 !px-2 !py-1.5 text-[10px]" aria-label={language === "pt" ? "Link público do jogador" : "Player public link"} />
+                            <button type="button" className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#315b47] text-[#8cebb2] hover:bg-[#173a29]" title={language === "pt" ? "Copiar link" : "Copy link"} aria-label={language === "pt" ? "Copiar link" : "Copy link"} onClick={() => void copyPlayerAnalysisShareLink()}><Copy size={12} /></button>
+                            <button type="button" className="flex h-7 shrink-0 items-center justify-center rounded border border-rose-900/70 px-2 text-[9px] text-rose-300 hover:bg-rose-950/30 disabled:opacity-40" disabled={playerShareBusy} onClick={() => void revokePlayerAnalysisShare()}>{language === "pt" ? "Desativar" : "Revoke"}</button>
+                          </div> : null}
+                        </div>}
                         <div className="grid gap-2 border-t border-[#263646] pt-2">
                           <div className="flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{playerRoleFilter === "goalkeeper" ? (language === "pt" ? "Momentos do guarda-redes" : "Goalkeeper actions") : (language === "pt" ? "Momentos do jogador de campo" : "Outfield actions")}</h4><span className="muted text-[9px]">{language === "pt" ? "Registo: vídeo −10 s" : "Capture: video −10 sec"}</span></div>
                           {!selectedAnalysisPlayers.length && <p className="text-[10px] text-amber-200">{language === "pt" ? "Seleciona pelo menos um jogador para ativar os momentos." : "Select at least one player to enable the actions."}</p>}
