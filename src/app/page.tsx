@@ -159,6 +159,12 @@ function youtubeMoment(base: string, seconds: number) {
   return id ? `https://www.youtube.com/watch?v=${id}&t=${Math.floor(seconds)}s` : "";
 }
 
+function isGoalEventRecord(record: MatchEvent): boolean {
+  const pt = record.event_name_pt.trim().replace(/\s+contra$/i, "").toLocaleLowerCase("pt-PT");
+  const en = record.event_name_en.trim().replace(/^opposition\s+/i, "").toLocaleLowerCase("en");
+  return record.event_type_id === "goal" || pt === "golo" || en === "goal";
+}
+
 export default function HomePage() {
   const [language, setLanguage] = useState<Language>("pt");
   const [role, setRole] = useState<"admin" | "analyst" | "configurator" | "viewer">("admin");
@@ -213,6 +219,9 @@ export default function HomePage() {
   const [summaryPlaying, setSummaryPlaying] = useState(false);
   const [summaryTransition, setSummaryTransition] = useState(false);
   const [summaryNextLabel, setSummaryNextLabel] = useState("");
+  const [summaryShareToken, setSummaryShareToken] = useState<string | null>(null);
+  const [summaryShareUrl, setSummaryShareUrl] = useState("");
+  const [summaryShareBusy, setSummaryShareBusy] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"account" | "events" | "members">("account");
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerVideoIdRef = useRef("");
@@ -222,6 +231,7 @@ export default function HomePage() {
   const summaryTransitionTimerRef = useRef<number | null>(null);
   const summarySequenceRef = useRef<SummaryClip[]>([]);
   const summaryIndexRef = useRef(-1);
+  const summaryShareRequestRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventTypesRef = useRef(events);
   const t = COPY[language];
@@ -232,6 +242,7 @@ export default function HomePage() {
   const canConfigure = supabase ? Boolean(projectId && (role === "admin" || role === "configurator")) : role === "admin" || role === "configurator";
   const canRecord = hasActiveMatch && Boolean(loadedUrl) && (supabase ? Boolean(projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst")) : role === "admin" || role === "analyst");
   const canManagePublicShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && loadedUrl && (role === "admin" || role === "analyst"));
+  const canCreateSummaryShare = Boolean(supabase && projectId && cloudUserId && cloudMatchId && (role === "admin" || role === "analyst"));
   const selectedSavedMatch = matches.find((match) => match.id === cloudMatchId) ?? null;
   const isAddingVideosToExistingMatch = Boolean(selectedSavedMatch);
   const competitionOptions = useMemo(() => Array.from(new Set(
@@ -256,6 +267,7 @@ export default function HomePage() {
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
     setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
     setSummarySelectedIds([]); setSummaryCurrentIndex(-1); setSummaryPlaying(false); setSummaryTransition(false);
+    summaryShareRequestRef.current += 1; setSummaryShareToken(null); setSummaryShareUrl(""); setSummaryShareBusy(false);
   }, []);
   const activeEvents = events.filter((event) => event.active);
   const eventRows = activeEvents.filter((event) => !event.is_counter);
@@ -433,8 +445,11 @@ export default function HomePage() {
       || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
   }, [records, matchVideos]);
+  const automaticGoalIds = useMemo(() => new Set(
+    summaryCandidates.filter(isGoalEventRecord).map((record) => record.id)
+  ), [summaryCandidates]);
   const summaryClips = useMemo(() => summaryCandidates
-    .filter((record) => summarySelectedIds.includes(record.id))
+    .filter((record) => summarySelectedIds.includes(record.id) || automaticGoalIds.has(record.id))
     .map((record): SummaryClip | null => {
       const sourceVideoId = parseYouTubeId(record.youtube_url) ?? parseYouTubeId(loadedUrl);
       if (!sourceVideoId) return null;
@@ -442,7 +457,7 @@ export default function HomePage() {
       return { record, videoId: sourceVideoId, startSecond, endSecond: startSecond + summaryClipDuration };
     })
     .filter((clip): clip is SummaryClip => clip !== null),
-    [summaryCandidates, summarySelectedIds, loadedUrl, summaryClipDuration]);
+    [summaryCandidates, summarySelectedIds, automaticGoalIds, loadedUrl, summaryClipDuration]);
   const goalScores = useMemo(() => calculateGoalScores(records), [records]);
 
   async function registerEvent(
@@ -812,6 +827,7 @@ export default function HomePage() {
       if (!existingMatch) setRecords([]);
       setImportedLiveData(existingMatch?.source_public_live_match_id ? importedLiveData : null);
       void loadShareForMatch(targetMatch.id);
+      void loadSummaryShareForMatch(targetMatch.id);
     } else {
       shareRequestRef.current += 1;
       setCloudMatchId(null);
@@ -853,6 +869,7 @@ export default function HomePage() {
     pendingSeekRef.current = null;
     setCloudMatchId(match.id);
     void loadShareForMatch(match.id);
+    void loadSummaryShareForMatch(match.id);
 
     let savedVideos: MatchVideo[] = [];
     if (supabase) {
@@ -901,6 +918,7 @@ export default function HomePage() {
   function startNewMatch() {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
+    summaryShareRequestRef.current += 1; setSummaryShareToken(null); setSummaryShareUrl(""); setSummaryShareBusy(false);
     shareRequestRef.current += 1;
     setCloudMatchId(null);
     pendingSeekRef.current = null;
@@ -946,6 +964,78 @@ export default function HomePage() {
     setPublicShareToken(token);
     setPublicShareUrl(token ? `${window.location.origin}/share/${token}` : "");
     setShareBusy(false);
+  }
+
+  async function loadSummaryShareForMatch(matchId: string) {
+    const requestId = ++summaryShareRequestRef.current;
+    setSummaryShareToken(null);
+    setSummaryShareUrl("");
+    if (!supabase || (role !== "admin" && role !== "analyst")) {
+      setSummaryShareBusy(false);
+      return;
+    }
+    setSummaryShareBusy(true);
+    const { data, error } = await supabase.rpc("get_match_summary_share_token", { target_match: matchId });
+    if (requestId !== summaryShareRequestRef.current) return;
+    if (error) {
+      setMessage(language === "pt"
+        ? `Não foi possível consultar o link do resumo. Confirma que a migração SQL 0026 está aplicada. ${error.message}`
+        : `Could not load the summary link. Confirm SQL migration 0026 is applied. ${error.message}`);
+      setSummaryShareBusy(false);
+      return;
+    }
+    const token = typeof data === "string" ? data : null;
+    setSummaryShareToken(token);
+    setSummaryShareUrl(token ? `${window.location.origin}/resumo/${token}` : "");
+    setSummaryShareBusy(false);
+  }
+
+  async function createSummaryShare() {
+    if (!supabase || !cloudMatchId || !canCreateSummaryShare || !summaryClips.length) return;
+    const requestId = ++summaryShareRequestRef.current;
+    setSummaryShareBusy(true);
+    const { data, error } = await supabase.rpc("create_match_summary_share", {
+      target_match: cloudMatchId,
+      selected_event_ids: summaryClips.map((clip) => clip.record.id),
+      clip_duration_seconds: summaryClipDuration,
+    });
+    if (requestId !== summaryShareRequestRef.current) return;
+    if (error || typeof data !== "string") {
+      setMessage(error?.message ?? (language === "pt" ? "Não foi possível criar o link do resumo." : "Could not create the summary link."));
+      setSummaryShareBusy(false);
+      return;
+    }
+    setSummaryShareToken(data);
+    setSummaryShareUrl(`${window.location.origin}/resumo/${data}`);
+    setSummaryShareBusy(false);
+    setMessage(language === "pt" ? "Link público do resumo criado." : "Public summary link created.");
+  }
+
+  async function revokeSummaryShare() {
+    if (!supabase || !cloudMatchId || !canCreateSummaryShare || !summaryShareToken) return;
+    const requestId = ++summaryShareRequestRef.current;
+    setSummaryShareBusy(true);
+    const { error } = await supabase.rpc("revoke_match_summary_share", { target_match: cloudMatchId });
+    if (requestId !== summaryShareRequestRef.current) return;
+    if (error) {
+      setMessage(error.message);
+      setSummaryShareBusy(false);
+      return;
+    }
+    setSummaryShareToken(null);
+    setSummaryShareUrl("");
+    setSummaryShareBusy(false);
+    setMessage(language === "pt" ? "Link do resumo desativado." : "Summary link disabled.");
+  }
+
+  async function copySummaryShareLink() {
+    if (!summaryShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(summaryShareUrl);
+      setMessage(language === "pt" ? "Link do resumo copiado." : "Summary link copied.");
+    } catch {
+      setMessage(language === "pt" ? "Copia o endereço apresentado no campo do link." : "Copy the address shown in the link field.");
+    }
   }
 
   async function createPublicShare() {
@@ -1587,15 +1677,16 @@ export default function HomePage() {
                         <option value={10}>10 {language === "pt" ? "segundos" : "seconds"}</option><option value={15}>15 {language === "pt" ? "segundos" : "seconds"}</option><option value={20}>20 {language === "pt" ? "segundos" : "seconds"}</option><option value={30}>30 {language === "pt" ? "segundos" : "seconds"}</option>
                       </select>
                     </label>
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] pb-2"><span className="text-[10px] font-semibold text-[#b8c7d3]">{summarySelectedIds.length} / {summaryCandidates.length} {language === "pt" ? "selecionadas" : "selected"}</span><div className="flex gap-2"><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#83e6a9] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds(summaryCandidates.map((record) => record.id))}>{language === "pt" ? "Todas" : "All"}</button><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#b8c7d3] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds([])}>{language === "pt" ? "Limpar" : "Clear"}</button></div></div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#263646] pb-2"><span className="text-[10px] font-semibold text-[#b8c7d3]">{summaryClips.length} / {summaryCandidates.length} {language === "pt" ? "selecionadas" : "selected"}</span><div className="flex gap-2"><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#83e6a9] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds(summaryCandidates.map((record) => record.id))}>{language === "pt" ? "Todas" : "All"}</button><button type="button" disabled={summaryPlaying} className="text-[10px] text-[#b8c7d3] hover:underline disabled:opacity-40" onClick={() => setSummarySelectedIds([])}>{language === "pt" ? "Limpar" : "Clear"}</button></div></div>
                     {summaryCandidates.length === 0 ? <p className="muted rounded-lg border border-dashed border-[#31475a] px-3 py-5 text-center text-xs">{language === "pt" ? "Ainda não existem eventos registados neste jogo." : "There are no recorded events for this match yet."}</p> : <div className="grid max-h-[36svh] gap-1 overflow-y-auto pr-1">
                       {summaryCandidates.map((record) => {
-                        const selected = summarySelectedIds.includes(record.id);
+                        const automaticGoal = automaticGoalIds.has(record.id);
+                        const selected = summarySelectedIds.includes(record.id) || automaticGoal;
                         const sourceId = parseYouTubeId(record.youtube_url);
                         const sourceIndex = matchVideos.findIndex((video) => parseYouTubeId(video.youtube_url) === sourceId);
                         return <label key={record.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2 transition ${selected ? "border-[#35d07f70] bg-[#35d07f10]" : "border-[#263646] bg-[#0b131c] hover:border-[#526b80]"}`}>
-                          <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={selected} disabled={summaryPlaying} onChange={(event) => setSummarySelectedIds((current) => event.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
-                          <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-semibold">{language === "pt" ? record.event_name_pt : record.event_name_en}</span><span className="shrink-0 font-mono text-[10px] text-[#83e6a9]">{formatTime(record.video_second)}</span></span><span className="muted mt-0.5 block text-[9px]">{sourceIndex >= 0 ? `${language === "pt" ? "Vídeo" : "Video"} ${sourceIndex + 1}` : (language === "pt" ? "Vídeo associado" : "Associated video")} · {record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}</span>{record.outcome && <span className="muted mt-0.5 block truncate text-[9px]">{record.outcome}</span>}</span>
+                          <input type="checkbox" className="mt-0.5 accent-[#35d07f]" checked={selected} disabled={summaryPlaying || automaticGoal} onChange={(event) => setSummarySelectedIds((current) => event.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
+                          <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-[11px] font-semibold">{language === "pt" ? record.event_name_pt : record.event_name_en}</span><span className="shrink-0 font-mono text-[10px] text-[#83e6a9]">{formatTime(record.video_second)}</span></span><span className="muted mt-0.5 block text-[9px]">{sourceIndex >= 0 ? `${language === "pt" ? "Vídeo" : "Video"} ${sourceIndex + 1}` : (language === "pt" ? "Vídeo associado" : "Associated video")} · {record.moment === "attack" ? (language === "pt" ? "Ataque" : "Attack") : (language === "pt" ? "Defesa" : "Defence")}{automaticGoal ? (language === "pt" ? " · Golo incluído automaticamente" : " · Goal included automatically") : ""}</span>{record.outcome && <span className="muted mt-0.5 block truncate text-[9px]">{record.outcome}</span>}</span>
                         </label>;
                       })}
                     </div>}
@@ -1605,7 +1696,23 @@ export default function HomePage() {
                         return <div key={clip.record.id}><div className={`flex items-center gap-2 rounded-md border px-2 py-2 ${summaryCurrentIndex === index ? "border-[#35d07f80] bg-[#35d07f12]" : "border-[#263646] bg-[#0b131c]"}`}><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#1e4933] text-[9px] font-bold text-[#8cebb2]">{index + 1}</span><span className="min-w-0 flex-1 truncate text-[10px] font-medium">{language === "pt" ? clip.record.event_name_pt : clip.record.event_name_en}</span><span className="shrink-0 font-mono text-[9px] text-[#83e6a9]">{formatTime(clip.startSecond)}</span><span className="shrink-0 text-[9px] text-[#91a4b5]">{sourceIndex >= 0 ? `V${sourceIndex + 1}` : "YT"}</span></div>{index < summaryClips.length - 1 && <div className="flex items-center justify-center gap-2 py-1 text-[8px] font-semibold uppercase tracking-[.18em] text-[#7a8d9e]"><span className="h-px flex-1 bg-[#31475a]" />{language === "pt" ? "Separador" : "Transition"}<span className="h-px flex-1 bg-[#31475a]" /></div>}</div>;
                       })}</div>}
                     </div>
-                    <p className="muted text-[9px] leading-relaxed">{language === "pt" ? "O resumo é reproduzido dentro da aplicação através do YouTube. Os separadores são visuais; não é criado nem exportado um ficheiro de vídeo único." : "The summary plays inside the app using YouTube. Transitions are visual; no single video file is rendered or exported."}</p>
+                    <p className="muted text-[9px] leading-relaxed">{language === "pt" ? "O resumo é reproduzido através do YouTube. Os separadores são visuais; não é criado um ficheiro MP4 único." : "The summary plays through YouTube. Transitions are visual; no single MP4 file is created."}</p>
+
+                    <section className="grid gap-2 border-t border-[#263646] pt-3">
+                      <div><h3 className="text-xs font-semibold">{language === "pt" ? "Link público do resumo" : "Public summary link"}</h3><p className="muted mt-1 text-[9px] leading-relaxed">{language === "pt" ? "Qualquer pessoa com o link pode ver apenas a sequência de vídeo, sem aceder aos eventos, estatísticas ou à análise do jogo. O link guarda a seleção atual; atualiza-o depois de alterar as jogadas ou a duração." : "Anyone with the link can view only the video sequence, with no access to events, statistics or match analysis. The link stores the current selection; update it after changing plays or duration."}</p></div>
+                      {canCreateSummaryShare ? <>
+                        {summaryShareToken && <div className="grid gap-2">
+                          <input className="field min-w-0 !py-2 text-[10px]" readOnly aria-label={language === "pt" ? "Link público do resumo" : "Public summary link"} value={summaryShareUrl} />
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" className="btn !py-1.5 text-[10px]" disabled={summaryShareBusy} onClick={() => void copySummaryShareLink()}><Copy size={12} />{language === "pt" ? "Copiar link" : "Copy link"}</button>
+                            <button type="button" className="btn !py-1.5 text-[10px] text-rose-300" disabled={summaryShareBusy} onClick={() => void revokeSummaryShare()}>{language === "pt" ? "Desativar" : "Disable"}</button>
+                          </div>
+                        </div> : <p className="muted text-[10px]">{language === "pt" ? "Ainda não existe link público para este resumo." : "There is no public link for this summary yet."}</p>}
+                        <button type="button" className="btn btn-primary w-full !py-2 text-[10px]" disabled={summaryShareBusy || summaryClips.length === 0} onClick={() => void createSummaryShare()}>
+                          <Share2 size={12} />{summaryShareBusy ? (language === "pt" ? "A preparar…" : "Preparing…") : summaryShareToken ? (language === "pt" ? "Atualizar link do resumo" : "Update summary link") : (language === "pt" ? "Criar link de visualização" : "Create viewing link")}
+                        </button>
+                      </> : <p className="text-[10px] text-amber-300">{language === "pt" ? "É necessária uma conta de analista para criar um link público. O link criado será de acesso livre." : "An analyst account is required to create a public link. Anyone with the link can view it."}</p>}
+                    </section>
                   </aside>
                 </div>
               )}
