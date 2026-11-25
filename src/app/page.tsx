@@ -1574,7 +1574,7 @@ export default function HomePage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#263646] px-3 py-3">
                       <p className="muted text-[10px]">{summaryPlaying ? (language === "pt" ? "A reproduzir o resumo automaticamente." : "Summary is playing automatically.") : (language === "pt" ? "Cada jogada começa no timestamp registado e termina após a duração escolhida." : "Each play starts at its recorded timestamp and ends after the selected duration.")}</p>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" className="btn btn-primary !py-2 text-xs" disabled={!summaryClips.length || !videoId} onClick={startSummaryPlayback}><Play size={13} />{summaryPlaying ? (language === "pt" ? "Reiniciar resumo" : "Restart summary") : (language === "pt" ? "Reproduzir resumo" : "Play summary")}</button>
+                        <button type="button" className="btn btn-primary !py-2 text-xs" disabled={!summaryClips.length} onClick={startSummaryPlayback}><Play size={13} />{summaryPlaying ? (language === "pt" ? "Reiniciar resumo" : "Restart summary") : (language === "pt" ? "Reproduzir resumo" : "Play summary")}</button>
                         <button type="button" className="btn !py-2 text-xs" disabled={!summaryPlaying && summaryCurrentIndex < 0} onClick={stopSummaryPlayback}>{language === "pt" ? "Parar" : "Stop"}</button>
                       </div>
                     </div>
