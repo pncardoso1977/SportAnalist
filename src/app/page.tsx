@@ -218,8 +218,8 @@ export default function HomePage() {
   const playerVideoIdRef = useRef("");
   const pendingSeekRef = useRef<number | null>(null);
   const pendingAutoplayRef = useRef(false);
-  const summaryTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
-  const summaryTransitionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const summaryTimerRef = useRef<number | null>(null);
+  const summaryTransitionTimerRef = useRef<number | null>(null);
   const summarySequenceRef = useRef<SummaryClip[]>([]);
   const summaryIndexRef = useRef(-1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
