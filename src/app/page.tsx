@@ -1070,6 +1070,8 @@ export default function HomePage() {
   function stopSummaryPlayback() {
     clearSummaryTimers();
     summaryIndexRef.current = -1;
+    pendingAutoplayRef.current = false;
+    pendingSeekRef.current = null;
     setSummaryCurrentIndex(-1);
     setSummaryPlaying(false);
     setSummaryTransition(false);
@@ -1119,6 +1121,7 @@ export default function HomePage() {
           setSummaryNextLabel(language === "pt" ? nextClip.record.event_name_pt : nextClip.record.event_name_en);
           summaryTransitionTimerRef.current = window.setTimeout(() => playSummaryClip(index + 1), 1300);
         } else {
+          playerRef.current?.pauseVideo();
           summaryIndexRef.current = -1;
           setSummaryPlaying(false);
           setSummaryCurrentIndex(-1);
