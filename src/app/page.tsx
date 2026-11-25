@@ -346,7 +346,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!videoId) return;
+    if (!videoId || analysisTab !== "video") return;
     const win = window as PlayerWindow;
     const initialize = () => {
       if (!win.YT?.Player) return;
@@ -382,7 +382,7 @@ export default function HomePage() {
       if (playerRef.current?.destroy) playerRef.current.destroy();
       playerRef.current = null;
     };
-  }, [videoId, refreshClock, t.loaded, t.videoUnavailable]);
+  }, [videoId, analysisTab, refreshClock, t.loaded, t.videoUnavailable]);
 
   const filteredRecords = useMemo(() => records
     .filter((record) => filterEvent === "all" || record.event_type_id === filterEvent)
