@@ -183,13 +183,13 @@ begin
   end if;
 
   if new.category_key = 'goalkeeper_save'
-     and new.detail_key not in ('posts', 'area', 'outside') then
+     and coalesce(new.detail_key, '') not in ('posts', 'area', 'outside') then
     raise exception 'Seleciona onde ocorreu a defesa';
   elsif new.category_key in ('goalkeeper_goal_conceded', 'goalkeeper_sweep_behind', 'goalkeeper_sweep_front', 'goalkeeper_ball_release')
-     and new.detail_key not in ('right', 'left', 'center') then
+     and coalesce(new.detail_key, '') not in ('right', 'left', 'center') then
     raise exception 'Seleciona o lado da ação do guarda-redes';
   elsif new.category_key = 'field_pass'
-     and new.detail_key not in ('short', 'long') then
+     and coalesce(new.detail_key, '') not in ('short', 'long') then
     raise exception 'Seleciona se o passe foi curto ou longo';
   elsif new.category_key in (
     'goalkeeper_incomplete_save', 'goalkeeper_footwork',
