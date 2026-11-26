@@ -243,3 +243,45 @@ tbody tr:hover { background: #ffffff06; }
     max-height: 55svh;
   }
 }
+
+
+/* Tactical drawing palette and video overlay controls. */
+.video-drawing-toolbar {
+  border-bottom: 1px solid var(--border);
+}
+.video-drawing-tool {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #31475a;
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: #101923;
+  color: #c7d4df;
+  font-size: 10px;
+  line-height: 1;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.video-drawing-tool:hover:not(:disabled) {
+  border-color: #5f819e;
+  background: #172331;
+}
+.video-drawing-tool-active {
+  border-color: #35d07f;
+  background: #153325;
+  color: #8cebb2;
+}
+.video-drawing-tool-danger {
+  color: #f0b0ad;
+  border-color: #694a40;
+}
+.video-drawing-tool-danger:hover:not(:disabled) {
+  border-color: #dd786f;
+  background: #321f19;
+}
+.video-drawing-tool:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}

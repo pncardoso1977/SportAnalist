@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Activity, ArrowDownToLine, ArrowLeft, CircleHelp, Clock3, Copy, FilePlus2,
-  Film, FolderOpen, Globe2, Link2, LogOut, Menu, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, UserPlus, UserRound, UsersRound, Video, X,
+  ArrowUpRight, Circle, CircleDot, Eraser, Film, FolderOpen, Globe2, Link2, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Share2, ShieldCheck, Timer, Trash2, Undo2, UserPlus, UserRound, UsersRound, Video, X,
 } from "lucide-react";
 import { DEFAULT_EVENT_TYPES, ZONE_LABELS, type EventMoment, type EventType, type Match, type MatchEvent, type MatchVideo, type Zone } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
@@ -13,10 +13,18 @@ import type { AppRole } from "@/lib/types";
 import { analyzeYouTubeGoals, isFirebaseAIConfigured, type DetectedGoal } from "@/lib/firebase-ai";
 import { calculateGoalScores, formatGoalScore } from "@/lib/goal-score";
 import { formatDuration, playerCourtSecondsInRange, type PlayerStint } from "@/lib/live-match";
+import { VideoDrawingOverlay, type VideoDrawing, type VideoDrawingDraft, type VideoDrawingTool } from "@/components/video-drawing-overlay";
 
 type Language = "pt" | "en";
 type AiGoalSuggestion = DetectedGoal & { id: string; confirmed: boolean };
 type PlayerAnalysisRole = "goalkeeper" | "field";
+const VIDEO_DRAWING_COLORS = [
+  { value: "#35d07f", label: "Verde" },
+  { value: "#38bdf8", label: "Azul" },
+  { value: "#f97316", label: "Laranja" },
+  { value: "#f43f5e", label: "Vermelho" },
+  { value: "#facc15", label: "Amarelo" },
+];
 type MatchAnalysisPlayer = {
   id: string; match_id: string; display_name: string; shirt_number: string | null;
   role_key: PlayerAnalysisRole; sort_order: number; created_by: string | null; created_at: string;
@@ -219,6 +227,12 @@ export default function HomePage() {
   const [venue, setVenue] = useState("");
   const [videoId, setVideoId] = useState("");
   const [currentSecond, setCurrentSecond] = useState(0);
+  const [videoDrawings, setVideoDrawings] = useState<VideoDrawing[]>([]);
+  const [drawingTool, setDrawingTool] = useState<VideoDrawingTool | null>(null);
+  const [drawingColor, setDrawingColor] = useState("#35d07f");
+  const [drawingLabel, setDrawingLabel] = useState("");
+  const [drawingBusy, setDrawingBusy] = useState(false);
+  const [videoDrawingSchemaError, setVideoDrawingSchemaError] = useState("");
   const [events, setEvents] = useState<EventType[]>(DEFAULT_EVENT_TYPES);
   const [records, setRecords] = useState<MatchEvent[]>([]);
   const [analysisPlayers, setAnalysisPlayers] = useState<MatchAnalysisPlayer[]>([]);
@@ -316,7 +330,7 @@ export default function HomePage() {
     playerRef.current?.pauseVideo();
     shareRequestRef.current += 1;
     setProjectId(null); setCloudUserId(null); setCloudMatchId(null); setRecords([]); setMatches([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); setVideoDrawings([]); setDrawingTool(null); setVideoDrawingSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setMatchVideos([]); setVideoLinks([""]); setLoadedUrl(""); setVideoId("");
     setPublicShareToken(null); setPublicShareUrl(""); setShareBusy(false);
     setWorkspaceSection("post-match"); setPostMatchPage("home"); setAnalysisTab("video");
@@ -338,13 +352,14 @@ export default function HomePage() {
         if (Array.isArray(data.events)) setEvents(data.events);
         if (Array.isArray(data.analysisPlayers)) setAnalysisPlayers(data.analysisPlayers);
         if (Array.isArray(data.playerAnalysisEvents)) setPlayerAnalysisEvents(data.playerAnalysisEvents);
+        if (Array.isArray(data.videoDrawings)) setVideoDrawings(data.videoDrawings);
       }
     } catch { /* Ignore malformed local demo data. */ }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("sportanalist-demo", JSON.stringify({ records, events, analysisPlayers, playerAnalysisEvents }));
-  }, [records, events, analysisPlayers, playerAnalysisEvents]);
+    localStorage.setItem("sportanalist-demo", JSON.stringify({ records, events, analysisPlayers, playerAnalysisEvents, videoDrawings }));
+  }, [records, events, analysisPlayers, playerAnalysisEvents, videoDrawings]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -365,9 +380,10 @@ export default function HomePage() {
           defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at,
           youtube_url: row.youtube_url,
         })));
-        const [{ data: playerRows, error: playerRowsError }, { data: playerEventRows, error: playerEventRowsError }] = await Promise.all([
+        const [{ data: playerRows, error: playerRowsError }, { data: playerEventRows, error: playerEventRowsError }, { data: drawingRows, error: drawingRowsError }] = await Promise.all([
           supabase.from("match_analysis_players").select("*").eq("match_id", cloudMatchId).order("sort_order").order("display_name"),
           supabase.from("match_player_analysis_events").select("*").eq("match_id", cloudMatchId).order("created_at", { ascending: false }),
+          supabase.from("match_video_drawings").select("*").eq("match_id", cloudMatchId).order("created_at", { ascending: true }),
         ]);
         if (!cancelled) {
           if (playerRowsError || playerEventRowsError) {
@@ -381,6 +397,15 @@ export default function HomePage() {
             setAnalysisPlayers((playerRows ?? []) as MatchAnalysisPlayer[]);
             setPlayerAnalysisEvents((playerEventRows ?? []) as PlayerAnalysisEvent[]);
             setSelectedAnalysisPlayerIds([]);
+          }
+          if (drawingRowsError) {
+            setVideoDrawingSchemaError(language === "pt"
+              ? "A paleta de desenho ainda não está instalada na base de dados. Executa a migração SQL 0030. " + drawingRowsError.message
+              : "Video drawing is not installed in the database yet. Apply SQL migration 0030. " + drawingRowsError.message);
+            setVideoDrawings([]);
+          } else {
+            setVideoDrawingSchemaError("");
+            setVideoDrawings((drawingRows ?? []) as VideoDrawing[]);
           }
         }
       }
@@ -399,6 +424,14 @@ export default function HomePage() {
             defending_team: row.defending_team, created_by: row.created_by, created_at: row.created_at, youtube_url: row.youtube_url,
           }, ...current]);
         } else if (payload.eventType === "DELETE") setRecords((current) => current.filter((entry) => entry.id !== (payload.old as { id: string }).id));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "match_video_drawings", filter: `match_id=eq.${cloudMatchId}` }, (payload) => {
+        const row = payload.new as VideoDrawing;
+        setVideoDrawings((current) => current.some((item) => item.id === row.id) ? current : [...current, row]);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "match_video_drawings", filter: `match_id=eq.${cloudMatchId}` }, (payload) => {
+        const row = payload.old as { id: string };
+        setVideoDrawings((current) => current.filter((item) => item.id !== row.id));
       }).subscribe() : null;
     return () => { cancelled = true; if (channel) void supabase.removeChannel(channel); };
   }, [supabase, projectId, cloudMatchId]);
@@ -539,6 +572,10 @@ export default function HomePage() {
   const playerAnalysisFeed = useMemo(() => playerAnalysisEvents.slice().sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   ), [playerAnalysisEvents]);
+  const currentVideoDrawings = useMemo(() => videoDrawings
+    .filter((drawing) => drawing.video_id === videoId)
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [videoDrawings, videoId]);
 
   async function registerEvent(
     eventType: EventType,
@@ -887,6 +924,90 @@ export default function HomePage() {
     if (playerSharePlayerId === player.id) { playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false); }
   }
 
+
+  function activateDrawingTool(tool: VideoDrawingTool) {
+    playerRef.current?.pauseVideo();
+    setDrawingTool((current) => current === tool ? null : tool);
+  }
+
+  async function createVideoDrawing(drawing: VideoDrawingDraft) {
+    if (!canRecord || (supabase && !cloudMatchId) || !videoId || drawingBusy) return;
+    setDrawingBusy(true);
+    const row = {
+      match_id: cloudMatchId ?? "demo-match",
+      video_id: videoId,
+      shape_kind: drawing.shape_kind,
+      x: Number(drawing.x.toFixed(6)),
+      y: Number(drawing.y.toFixed(6)),
+      end_x: Number(drawing.end_x.toFixed(6)),
+      end_y: Number(drawing.end_y.toFixed(6)),
+      color: drawing.color,
+      label: drawing.label,
+      created_by: cloudUserId,
+    };
+
+    if (supabase) {
+      const { data, error } = await supabase.from("match_video_drawings").insert(row).select("*").single();
+      if (error || !data) {
+        setVideoDrawingSchemaError(language === "pt"
+          ? "Não foi possível guardar o desenho. Confirma que a migração SQL 0030 está aplicada. " + (error?.message ?? "")
+          : "Could not save the drawing. Confirm SQL migration 0030 is applied. " + (error?.message ?? ""));
+        setMessage(language === "pt" ? "O desenho não foi guardado." : "The drawing was not saved.");
+        setDrawingBusy(false);
+        return;
+      }
+      setVideoDrawings((current) => [...current, data as VideoDrawing]);
+    } else {
+      const saved: VideoDrawing = {
+        ...row,
+        id: crypto.randomUUID(),
+        created_by: null,
+        created_at: new Date().toISOString(),
+      };
+      setVideoDrawings((current) => [...current, saved]);
+    }
+    setVideoDrawingSchemaError("");
+    setDrawingBusy(false);
+  }
+
+  async function undoLastVideoDrawing() {
+    const last = currentVideoDrawings[currentVideoDrawings.length - 1];
+    if (!last || drawingBusy) return;
+    setDrawingBusy(true);
+    if (supabase) {
+      const { error } = await supabase.from("match_video_drawings").delete().eq("id", last.id);
+      if (error) {
+        setMessage(error.message);
+        setDrawingBusy(false);
+        return;
+      }
+    }
+    setVideoDrawings((current) => current.filter((item) => item.id !== last.id));
+    setDrawingBusy(false);
+  }
+
+  async function clearCurrentVideoDrawings() {
+    if (!currentVideoDrawings.length || drawingBusy) return;
+    const confirmed = window.confirm(language === "pt"
+      ? "Eliminar todos os desenhos guardados neste vídeo?"
+      : "Delete all drawings saved on this video?");
+    if (!confirmed) return;
+    setDrawingBusy(true);
+    if (supabase && cloudMatchId) {
+      const { error } = await supabase.from("match_video_drawings")
+        .delete()
+        .eq("match_id", cloudMatchId)
+        .eq("video_id", videoId);
+      if (error) {
+        setMessage(error.message);
+        setDrawingBusy(false);
+        return;
+      }
+    }
+    setVideoDrawings((current) => current.filter((item) => item.video_id !== videoId));
+    setDrawingBusy(false);
+  }
+
   async function registerPlayerAnalysisAction(categoryKey: string, detailKey: string | null = null) {
     if (!canRecord || selectedAnalysisPlayers.length === 0) {
       setMessage(language === "pt" ? "Seleciona pelo menos um jogador para registar o momento." : "Select at least one player to record the action.");
@@ -989,6 +1110,7 @@ export default function HomePage() {
     pendingSeekRef.current = null;
     setLoadedUrl(url);
     setVideoId(id);
+    setDrawingTool(null);
     setCurrentSecond(0);
     setMessage(language === "pt" ? "Vídeo selecionado. Os novos eventos ficam associados a este vídeo." : "Video selected. New events will be associated with this video.");
   }
@@ -1102,7 +1224,7 @@ export default function HomePage() {
       setCloudMatchId(targetMatch.id);
       if (!existingMatch) {
         setRecords([]);
-        setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
+        setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); setVideoDrawings([]); setDrawingTool(null); setVideoDrawingSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
       }
       setImportedLiveData(existingMatch?.source_public_live_match_id ? importedLiveData : null);
       void loadShareForMatch(targetMatch.id);
@@ -1113,7 +1235,7 @@ export default function HomePage() {
       setPublicShareToken(null);
       setPublicShareUrl("");
       setShareBusy(false);
-      setRecords([]); setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
+      setRecords([]); setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); setVideoDrawings([]); setDrawingTool(null); setVideoDrawingSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
       setMatchVideos(uniqueVideoUrls.map((url, index) => ({
         id: `demo-video-${index}`, match_id: "demo-match", youtube_url: url, sort_order: index,
       })));
@@ -1130,7 +1252,7 @@ export default function HomePage() {
   async function openSavedMatch(match: Match) {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); setVideoDrawings([]); setDrawingTool(null); setVideoDrawingSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setCaptureMode("team");
     setAiCandidates([]);
     setAiConsent(false);
@@ -1199,7 +1321,7 @@ export default function HomePage() {
   function startNewMatch() {
     stopSummaryPlayback();
     setSummarySelectedIds([]);
-    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
+    setAnalysisPlayers([]); setPlayerAnalysisEvents([]); setSelectedAnalysisPlayerIds([]); setPlayerAnalysisSchemaError(""); setVideoDrawings([]); setDrawingTool(null); setVideoDrawingSchemaError(""); playerShareRequestRef.current += 1; setPlayerSharePlayerId(null); setPlayerShareUrl(""); setPlayerShareBusy(false);
     setCaptureMode("team");
     summaryShareRequestRef.current += 1; setSummaryShareToken(null); setSummaryShareUrl(""); setSummaryShareBusy(false);
     shareRequestRef.current += 1;
@@ -1770,13 +1892,74 @@ export default function HomePage() {
               <span className="rounded-lg border border-[#263646] bg-[#0b131c] px-2.5 py-1.5 font-mono text-sm text-[#75eca8]"><Clock3 className="mr-1.5 inline" size={13} />{formatTime(currentSecond)}</span>
             </div>
             <div className="video-stage relative w-full overflow-hidden bg-black">
-              {videoId ? <div id="sportanalist-player" className="h-full w-full" /> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-[#8798a8]">
+              {videoId ? <>
+                <div id="sportanalist-player" className="h-full w-full" />
+                <VideoDrawingOverlay
+                  drawings={currentVideoDrawings}
+                  tool={canRecord ? drawingTool : null}
+                  color={drawingColor}
+                  label={drawingLabel}
+                  onCreate={(drawing) => void createVideoDrawing(drawing)}
+                />
+              </> : <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center text-[#8798a8]">
                 <Video size={34} strokeWidth={1.2} />
                 <p className="text-sm">{cloudMatchId && matches.find((match) => match.id === cloudMatchId)?.source_public_live_match_id
                   ? (language === "pt" ? "Jogo ao vivo terminado. Consulta os tempos abaixo e associa vídeos YouTube para iniciar a análise técnico-tática." : "Live match finished. Review the player times below and attach YouTube videos to begin technical-tactical analysis.")
                   : t.videoHelp}</p>
               </div>}
             </div>
+            {videoId && <section className="video-drawing-toolbar border-t border-[#263646] bg-[#0b131c] px-2.5 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Pencil size={13} className="text-[#83e6a9]" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#b8c7d3]">{language === "pt" ? "Paleta de desenho" : "Drawing palette"}</span>
+                  <span className="rounded-full bg-[#263646] px-1.5 py-0.5 text-[9px] text-[#9eb0c0]">{currentVideoDrawings.length}</span>
+                </div>
+                <span className="text-[9px] text-[#83e6a9]">{language === "pt" ? "Guardado automaticamente" : "Saved automatically"}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <button type="button" disabled={!canRecord || drawingBusy || Boolean(videoDrawingSchemaError)} onClick={() => activateDrawingTool("arrow")}
+                  className={"video-drawing-tool " + (drawingTool === "arrow" ? "video-drawing-tool-active" : "")}>
+                  <ArrowUpRight size={13} />{language === "pt" ? "Seta" : "Arrow"}
+                </button>
+                <button type="button" disabled={!canRecord || drawingBusy || Boolean(videoDrawingSchemaError)} onClick={() => activateDrawingTool("player")}
+                  className={"video-drawing-tool " + (drawingTool === "player" ? "video-drawing-tool-active" : "")}>
+                  <Circle size={13} />{language === "pt" ? "Jogador" : "Player"}
+                </button>
+                <button type="button" disabled={!canRecord || drawingBusy || Boolean(videoDrawingSchemaError)} onClick={() => activateDrawingTool("ball")}
+                  className={"video-drawing-tool " + (drawingTool === "ball" ? "video-drawing-tool-active" : "")}>
+                  <CircleDot size={13} />{language === "pt" ? "Bola" : "Ball"}
+                </button>
+                {drawingTool === "player" && <input value={drawingLabel} onChange={(event) => setDrawingLabel(event.target.value.slice(0, 12))}
+                  className="field !w-20 !px-2 !py-1 text-[10px]" maxLength={12}
+                  placeholder={language === "pt" ? "N.º / nome" : "No. / name"} aria-label={language === "pt" ? "Identificação do jogador" : "Player label"} />}
+                <div className="mx-1 h-5 w-px bg-[#263646]" />
+                <span className="text-[9px] text-[#9eb0c0]">{language === "pt" ? "Cor" : "Color"}</span>
+                {VIDEO_DRAWING_COLORS.map((entry) => <button key={entry.value} type="button" disabled={!canRecord || drawingBusy}
+                  onClick={() => setDrawingColor(entry.value)} title={entry.label} aria-label={entry.label}
+                  className={"h-5 w-5 rounded-full border-2 " + (drawingColor === entry.value ? "border-white ring-1 ring-white/40" : "border-[#526170]")}
+                  style={{ backgroundColor: entry.value }} />)}
+                <div className="mx-1 h-5 w-px bg-[#263646]" />
+                <button type="button" className="video-drawing-tool" disabled={!canRecord || drawingBusy || currentVideoDrawings.length === 0} onClick={() => void undoLastVideoDrawing()}>
+                  <Undo2 size={12} />{language === "pt" ? "Desfazer" : "Undo"}
+                </button>
+                <button type="button" className="video-drawing-tool video-drawing-tool-danger" disabled={!canRecord || drawingBusy || currentVideoDrawings.length === 0} onClick={() => void clearCurrentVideoDrawings()}>
+                  <Eraser size={12} />{language === "pt" ? "Limpar" : "Clear"}
+                </button>
+                {drawingTool && <button type="button" className="video-drawing-tool" onClick={() => setDrawingTool(null)}>{language === "pt" ? "Terminar" : "Done"}</button>}
+              </div>
+              <p className="mt-1.5 text-[9px] text-[#8193a4]">
+                {drawingTool === "arrow"
+                  ? (language === "pt" ? "Arrasta no vídeo para desenhar uma seta." : "Drag on the video to draw an arrow.")
+                  : drawingTool === "player"
+                    ? (language === "pt" ? "Clica no vídeo para marcar a posição de um jogador." : "Click the video to mark a player's position.")
+                    : drawingTool === "ball"
+                      ? (language === "pt" ? "Clica no vídeo para marcar a posição da bola." : "Click the video to mark the ball.")
+                      : (language === "pt" ? "Seleciona uma ferramenta e desenha diretamente sobre o vídeo." : "Select a tool and draw directly over the video.")}
+              </p>
+              {drawingBusy && <p className="mt-1 text-[9px] text-[#9eb0c0]">{language === "pt" ? "A guardar desenho…" : "Saving drawing…"}</p>}
+              {videoDrawingSchemaError && <p className="mt-1 break-words text-[9px] text-amber-300">{videoDrawingSchemaError}</p>}
+            </section>}
             {matchVideos.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 border-t border-[#263646] px-2.5 py-2">
                 <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide text-[#9eb0c0]">{language === "pt" ? "Vídeos do jogo" : "Match videos"}</span>
