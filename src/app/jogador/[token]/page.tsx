@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { Activity, ExternalLink, Play, ShieldAlert, Video } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
+import { PublicMatchSheet, type PublicMatchSheetData } from "@/components/public-match-sheet";
 
 type PublicPlayerEvent = {
   video_second: number;
@@ -11,6 +12,7 @@ type PublicPlayerEvent = {
   detail_key: string | null;
 };
 type PublicPlayerAnalysis = {
+  match: PublicMatchSheetData;
   player: {
     display_name: string;
     shirt_number: string | null;
@@ -103,7 +105,7 @@ export default function PublicPlayerAnalysisPage({ params }: { params: Promise<{
       }
       const { data, error } = await supabase.rpc("get_public_player_analysis", { p_share_token: token });
       if (!active) return;
-      if (error || !data || !data.player) {
+      if (error || !data || !data.player || !data.match) {
         setLoadError(language === "pt"
           ? "Este link não é válido ou a partilha foi desativada pelo editor."
           : "This link is invalid or sharing has been disabled by the editor.");
@@ -226,20 +228,23 @@ export default function PublicPlayerAnalysisPage({ params }: { params: Promise<{
         </section>
       ) : (
         <>
-          <section className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold tracking-tight">
-                {analysis.player.shirt_number ? "N.º " + analysis.player.shirt_number + " · " : ""}
-                {analysis.player.display_name}
-              </h2>
-              <p className="muted mt-1 text-xs">
-                {text.player}: {analysis.player.role_key === "goalkeeper" ? text.goalkeeper : text.field}
-              </p>
-            </div>
-            <a className="btn !px-3 !py-2 text-xs" href={activeVideoUrl || "#"} target="_blank" rel="noreferrer">
-              <ExternalLink size={13} />{text.openVideo}
-            </a>
-          </section>
+          <div className="grid gap-2">
+            <PublicMatchSheet match={analysis.match} language={language} />
+            <section className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold tracking-tight">
+                  {analysis.player.shirt_number ? "N.º " + analysis.player.shirt_number + " · " : ""}
+                  {analysis.player.display_name}
+                </h2>
+                <p className="muted mt-1 text-xs">
+                  {text.player}: {analysis.player.role_key === "goalkeeper" ? text.goalkeeper : text.field}
+                </p>
+              </div>
+              <a className="btn !px-3 !py-2 text-xs" href={activeVideoUrl || "#"} target="_blank" rel="noreferrer">
+                <ExternalLink size={13} />{text.openVideo}
+              </a>
+            </section>
+          </div>
 
           <section className="analysis-workspace with-event-controls min-w-0">
             <section className="analysis-video-panel panel min-w-0 overflow-hidden">

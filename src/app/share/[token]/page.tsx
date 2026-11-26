@@ -5,6 +5,7 @@ import { Activity, ExternalLink, Play, ShieldAlert, Video } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { ZONE_LABELS, type EventMoment, type Zone } from "@/lib/types";
 import { calculateGoalScores, formatGoalScore } from "@/lib/goal-score";
+import { PublicMatchSheet, type PublicMatchSheetData } from "@/components/public-match-sheet";
 
 type PublicMatch = {
   id: string;
@@ -14,8 +15,11 @@ type PublicMatch = {
   youtube_url: string | null;
   age_group?: string | null;
   competition?: string | null;
+  round_label?: string | null;
   played_at?: string | null;
+  kickoff_time?: string | null;
   venue?: string | null;
+  live_status?: "scheduled" | "live" | "finished" | null;
   analyzed_team_is_home?: boolean;
   created_at: string;
 };
@@ -203,24 +207,14 @@ export default function PublicMatchPage({ params }: { params: Promise<{ token: s
         </section>
       ) : (
         <>
-          <section className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold tracking-tight">
-                {analysis.match.home_team} <span className="muted font-normal">vs</span> {analysis.match.away_team}
-              </h2>
-              <p className="muted mt-1 text-xs">
-                {[analysis.match.age_group, analysis.match.competition].filter(Boolean).join(" · ")}
-                {analysis.match.played_at
-                  ? ` · ${new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium" }).format(new Date(`${analysis.match.played_at}T12:00:00`))}`
-                  : ""}
-              </p>
-              {analysis.match.venue && <p className="muted mt-1 text-xs">{analysis.match.venue}</p>}
-              <p className="muted mt-1 text-[10px]">{language === "pt" ? "Equipa analisada:" : "Analysed team:"} {analysis.match.analyzed_team} · {analysis.match.analyzed_team_is_home === false ? (language === "pt" ? "Fora" : "Away") : (language === "pt" ? "Casa" : "Home")}</p>
+          <div className="grid gap-2">
+            <PublicMatchSheet match={analysis.match} language={language} />
+            <div className="flex justify-end">
+              <a className="btn !px-3 !py-2 text-xs" href={activeVideoUrl || "#"} target="_blank" rel="noreferrer">
+                <ExternalLink size={13} />{text.openVideo}
+              </a>
             </div>
-            <a className="btn !px-3 !py-2 text-xs" href={activeVideoUrl || "#"} target="_blank" rel="noreferrer">
-              <ExternalLink size={13} />{text.openVideo}
-            </a>
-          </section>
+          </div>
 
           <section className="analysis-workspace with-event-controls min-w-0">
             <section className="analysis-video-panel panel min-w-0 overflow-hidden">
