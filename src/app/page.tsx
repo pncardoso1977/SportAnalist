@@ -931,7 +931,7 @@ export default function HomePage() {
   }
 
   async function createVideoDrawing(drawing: VideoDrawingDraft) {
-    if (!canRecord || (supabase && !cloudMatchId) || !videoId || drawingBusy) return;
+    if (!canRecord || (supabase && !cloudMatchId) || !videoId) return;
     setDrawingBusy(true);
     const row = {
       match_id: cloudMatchId ?? "demo-match",
