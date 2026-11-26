@@ -147,8 +147,8 @@ export function VideoDrawingOverlay({ drawings, tool, color, label, onCreate }: 
         if (drawing.shape_kind === "player") {
           return (
             <g key={drawing.id}>
-              <circle cx={x} cy={y} r="18" fill="#0b131c" fillOpacity="0.9" stroke={drawing.color} strokeWidth="4" />
-              {drawing.label && <text x={x} y={y + 4} fill="#ffffff" fontSize="13" fontWeight="700" textAnchor="middle">{drawing.label}</text>}
+              <circle cx={x} cy={y} r="22" fill="#0b131c" fillOpacity="0.35" stroke={drawing.color} strokeWidth="4" />
+              {drawing.label && <text x={x} y={y + 4} fill="#ffffff" fontSize="14" fontWeight="700" textAnchor="middle">{drawing.label}</text>}
             </g>
           );
         }
