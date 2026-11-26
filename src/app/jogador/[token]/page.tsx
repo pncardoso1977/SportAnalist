@@ -268,7 +268,7 @@ export default function PublicPlayerAnalysisPage({ params }: { params: Promise<{
                   {videoOptions.map((video, index) => (
                     <button key={parseYouTubeId(video) ?? video} type="button"
                       onClick={() => selectPublicVideo(video)}
-                      className={\`rounded-md border px-2 py-1 text-[10px] \${parseYouTubeId(activeVideoUrl) === parseYouTubeId(video) ? "border-[#35d07f80] bg-[#35d07f18] text-[#83e6a9]" : "border-[#31475a] text-[#b8c7d3]"}\`}>
+                      className={"rounded-md border px-2 py-1 text-[10px] " + (parseYouTubeId(activeVideoUrl) === parseYouTubeId(video) ? "border-[#35d07f80] bg-[#35d07f18] text-[#83e6a9]" : "border-[#31475a] text-[#b8c7d3]")}>
                       {language === "pt" ? "Vídeo" : "Video"} {index + 1}
                     </button>
                   ))}
@@ -309,7 +309,7 @@ export default function PublicPlayerAnalysisPage({ params }: { params: Promise<{
                           <Play size={10} />{formatTime(event.video_second)}
                         </button>
                         <a
-                          href={event.youtube_url || \`https://www.youtube.com/watch?v=\${videoId}&t=\${event.video_second}s\`}
+                          href={event.youtube_url || ("https://www.youtube.com/watch?v=" + videoId + "&t=" + event.video_second + "s")}
                           target="_blank"
                           rel="noreferrer"
                           title={text.openVideo}
